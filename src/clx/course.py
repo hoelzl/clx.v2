@@ -21,7 +21,7 @@ class Topic:
     def build_files(self):
         for file in sorted(list(self.path.iterdir())):
             if file.is_file():
-                self.files.append(File.from_path(file))
+                self.files.append(File.from_path(file, self))
 
 
 @define

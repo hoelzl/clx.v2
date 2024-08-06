@@ -11,10 +11,12 @@ class Text:
 
 
 TEXT_MAPPINGS = {
+    "de": Text(de="De", en="De"),
+    "en": Text(de="En", en="En"),
     "code": Text(de="Python", en="Python"),
     "html": Text(de="Html", en="Html"),
     "notebook": Text(de="Notebooks", en="Notebooks"),
-    "code_along": Text(de="Code-Along", en="Code-Along"),
+    "code-along": Text(de="Code-Along", en="Code-Along"),
     "completed": Text(de="Completed", en="Completed"),
     "speaker": Text(de="Speaker", en="Speaker"),
     "slides": Text(de="Folien", en="Slides"),

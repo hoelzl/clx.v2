@@ -6,8 +6,11 @@ from clx.utils.text_utils import Text
 from course_fixtures import course_spec
 
 
+DATA_DIR = Path(__file__).parent / "data"
+
+
 def test_build_topic_map(course_spec):
-    course = Course(course_spec, Path(__file__).parent / "data")
+    course = Course(course_spec, DATA_DIR)
     course.build_topic_map()
     assert len(course._topic_map) == 3
 
@@ -25,7 +28,7 @@ def test_build_topic_map(course_spec):
 
 
 def test_course_from_spec(course_spec):
-    course = Course.from_spec(course_spec, Path(__file__).parent / "data")  # noqa
+    course = Course.from_spec(course_spec, DATA_DIR)
     assert len(course.sections) == 2
 
     section_1 = course.sections[0]

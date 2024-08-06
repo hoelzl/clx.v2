@@ -2,7 +2,9 @@ import re
 from enum import StrEnum
 from pathlib import Path
 
-from attrs import frozen
+from attrs import frozen, field
+
+from clx.utils.text_utils import as_dir_name
 
 SLIDES_PREFIX = "slides_"
 
@@ -30,6 +32,8 @@ SKIP_DIRS = frozenset(
         "CMakeFiles",
     )
 )
+
+PLANTUML_EXTENSIONS = {".pu", ".puml", ".plantuml"}
 
 SUPPORTED_PROG_LANG_EXTENSIONS = frozenset(
     (
@@ -70,6 +74,7 @@ def simplify_ordered_name(name: str, prefix: str | None = None) -> str:
     return "_".join(parts[2:])
 
 
+
 class Lang(StrEnum):
     DE = "de"
     EN = "en"
@@ -86,12 +91,33 @@ class Mode(StrEnum):
     COMPLETED = "completed"
 
 
+def ext_for(format_: str | Format) -> str:
+    match str(format_):
+        case "html":
+            return ".html"
+        case "notebook":
+            return ".ipynb"
+        case "code":
+            return ".py"
+        case _:
+            raise ValueError(f"Unknown format: {format_}")
+
+
 @frozen
 class OutputSpec:
-    lang: Lang
-    format: str
-    mode: str
-    output_dir: Path
+    lang: str = field(converter=str)
+    format: str = field(converter=str)
+    mode: str = field(converter=str)
+    root_dir: Path
+    output_dir: Path = field(init=False)
+
+    def __attrs_post_init__(self):
+        lang = as_dir_name(self.lang, self.lang)
+        format_ = as_dir_name(self.format, self.lang)
+        mode = as_dir_name(self.mode, self.lang)
+        object.__setattr__(
+            self, "output_dir", self.root_dir / f"{lang}/{format_}/{mode}"
+        )
 
     def __iter__(self):
         return iter((self.lang, self.format, self.mode, self.output_dir))
@@ -105,5 +131,12 @@ def output_specs(root_dir: Path):
                     lang=lang_dir,
                     format=format_dir,
                     mode=mode_dir,
-                    output_dir=root_dir / lang_dir / format_dir / mode_dir,
+                    root_dir=root_dir,
                 )
+    for lang_dir in [Lang.DE, Lang.EN]:
+        yield OutputSpec(
+            lang=lang_dir,
+            format=Format.CODE,
+            mode=Mode.COMPLETED,
+            root_dir=root_dir,
+        )

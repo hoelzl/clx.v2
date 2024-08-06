@@ -12,19 +12,19 @@ SLEEP_TIME = 0.01
 class TestOperation(Operation):
     counter = 0
 
-    async def exec(self):
+    async def exec(self, *args, **kwargs):
         TestOperation.counter += 1
 
 
 class Stage1Operation(TestOperation):
-    async def exec(self):
+    async def exec(self, *args, **kwargs):
         assert TestOperation.counter < NUM_OPERATIONS
         await asyncio.sleep(SLEEP_TIME)
         await super().exec()
 
 
 class Stage2Operation(TestOperation):
-    async def exec(self):
+    async def exec(self, *args, **kwargs):
         assert TestOperation.counter >= NUM_OPERATIONS
         await asyncio.sleep(SLEEP_TIME)
         await super().exec()
