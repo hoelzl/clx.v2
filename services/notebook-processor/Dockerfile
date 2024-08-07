@@ -9,4 +9,4 @@ COPY . .
 
 ENV PYTHONPATH=/app:$PYTHONPATH
 
-CMD ["python", "-m", "nb.notebook_processor"]
+CMD ["python", "-m", "nb.nats_server"]

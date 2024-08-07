@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import platform
 import warnings
 from hashlib import sha3_224
 from pathlib import Path
@@ -15,10 +16,17 @@ from nbformat import NotebookNode
 from nbformat.validator import normalize
 
 from .output_spec import OutputSpec
-from .utils.jupyter_utils import (Cell, get_cell_type, get_slide_tag, get_tags,
-                                  is_answer_cell, is_code_cell, is_markdown_cell,
-                                  warn_on_invalid_code_tags,
-                                  warn_on_invalid_markdown_tags, )
+from .utils.jupyter_utils import (
+    Cell,
+    get_cell_type,
+    get_slide_tag,
+    get_tags,
+    is_answer_cell,
+    is_code_cell,
+    is_markdown_cell,
+    warn_on_invalid_code_tags,
+    warn_on_invalid_markdown_tags,
+)
 from .utils.prog_lang_utils import kernelspec_for, language_info
 
 
@@ -198,11 +206,16 @@ class NotebookProcessor:
                         )
                         ep = ExecutePreprocessor(timeout=None)
                         loop = asyncio.get_running_loop()
+                        path = (
+                            Path("C:/tmp")
+                            if platform.system() == "Windows"
+                            else Path("/tmp")
+                        )
                         await loop.run_in_executor(
                             None,
                             lambda: ep.preprocess(
                                 processed_nb,
-                                resources={"metadata": {"path": Path("C:/tmp")}},
+                                resources={"metadata": {"path": path}},
                             ),
                         )
                 except Exception:

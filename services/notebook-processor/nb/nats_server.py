@@ -4,7 +4,6 @@ import logging
 import os
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
 
 import nats
 from nats.aio.msg import Msg
@@ -115,7 +114,7 @@ async def process_message(message: Msg, client: nats.NATS) -> Result:
 
 async def main():
     client = await connect_client_with_retry(NATS_URL)
-    subscriber = await client.subscribe("nb.process")
+    subscriber = await client.subscribe("nb.process", queue=QUEUE_GROUP)
     try:
         async for message in subscriber.messages:
             try:

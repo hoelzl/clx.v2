@@ -20,7 +20,13 @@ async def test_notebook_processor():
     nc = await nats.connect(NATS_URL)
     reply = await nc.request("nb.process", json.dumps(payload).encode(), timeout=60)
     result = json.loads(reply.data.decode())
-    print(result["result"])
+    if isinstance(result, dict):
+        if notebook := result.get("result"):
+            print(notebook)
+        else:
+            pprint(result)
+    else:
+        print(result)
 
 if __name__ == "__main__":
     asyncio.run(test_notebook_processor())
