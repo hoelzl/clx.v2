@@ -104,3 +104,65 @@ def test_course_notebooks(course_spec):
         de="Mehr Folien von Test 1", en="Another Topic from Test 1"
     )
     assert nb3.number_in_section == 1
+
+
+def test_topic_matches_path(topic_1):
+    # Existing slides in topic dir match
+    assert topic_1.matches_path(
+        topic_1.path / "slides_some_topic_from_test_1.py", False
+    )
+    # New slides in topic dir match
+    assert topic_1.matches_path(topic_1.path / "slides_new_topic.py", False)
+    # Images in the img/ subdirectory match
+    assert topic_1.matches_path(topic_1.path / "img/my_image.png", False)
+    # PlantUML files in the pu/ subdirectory match
+    assert topic_1.matches_path(topic_1.path / "pu/my_diag.pu", False)
+    # DrawIO files in the drawio/ subdirectory match
+    assert topic_1.matches_path(topic_1.path / "drawio/my_drawing.drawio", False)
+    # Deeply nested data files match
+    assert topic_1.matches_path(topic_1.path / "data/more_data/csv/test.csv", False)
+
+    # Files in other topics do not match
+    other_topic = Path(DATA_DIR / "module_010_test_2" / "topic_200_other")
+    assert not topic_1.matches_path(
+        other_topic / "slides_a_topic_from_test_2.py", False
+    )
+
+    # Files in the parent module do not match
+    assert not topic_1.matches_path(
+        topic_1.path.parent / "slides_in_parent.py", False
+    )
+
+
+def test_add_file_to_course(course_spec):
+    unit = Course.from_spec(course_spec, DATA_DIR, OUTPUT_DIR)
+    assert len(unit.files) == 9
+    topic_1 = unit.topics[0]
+    topic_2 = unit.topics[1]
+    # Note that we cannot easily add Notebooks, since notebooks need to actually
+    # exist on disk to be added to the course, since we need information from the
+    # notebook to fill out its properties.
+    file_1 = topic_1.path / "python_file.py"
+    assert unit.find_file(file_1) is None
+    file_2 = topic_2.path / "img/my_new_image.png"
+    assert unit.find_file(file_2) is None
+    file_3 = topic_2.path.parent / "data/my_new_data.csv"
+    assert unit.find_file(file_3) is None
+    file_4 = topic_1.path / "slides_a_notebook.py"
+    assert unit.find_file(file_4) is None
+
+    unit.add_file(file_1)
+    assert len(unit.files) == 10
+    assert unit.find_file(file_1).path == file_1
+
+    unit.add_file(file_2)
+    assert len(unit.files) == 11
+    assert unit.find_file(file_2).path == file_2
+
+    unit.add_file(file_3)
+    assert len(unit.files) == 11
+    assert unit.find_file(file_3) is None
+
+    unit.add_file(file_4)
+    assert len(unit.files) == 11
+    assert unit.find_file(file_4) is None

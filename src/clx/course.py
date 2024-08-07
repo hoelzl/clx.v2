@@ -37,13 +37,29 @@ class Topic:
         return self._file_map.get(path)
 
     def add_file(self, path: Path):
+        # We can add files that don't exist yet (e.g. generated files), so don't check
+        # if the path resolves to a file.
+        if not self.matches_path(path, False):
+            logger.debug(f"Path not within topic: {path}")
+            return
         if self.file_for_path(path):
             logger.debug(f"Duplicate path when adding file: {path}")
             return
         if path.is_dir():
             logger.error(f"Trying to add a directory to topic {self.id!r}: {path}")
             return
-        self._file_map[path] = File.from_path(self.course, path, self)
+        try:
+            self._file_map[path] = File.from_path(self.course, path, self)
+        except Exception as e:
+            logger.error(f"Error adding file {path}: {e}")
+
+    def matches_path(self, path: Path, check_is_file: bool = True) -> bool:
+        """Returns True if the path is within the topic directory."""
+        if self.path.resolve() in path.resolve().parents:
+            if check_is_file:
+                return path.is_file()
+            return True
+        return False
 
     def build_file_map(self):
         logger.debug(f"Building file map for {self.path}")
@@ -102,8 +118,26 @@ class Course:
         return self.spec.name
 
     @property
+    def topics(self) -> list[Topic]:
+        return [topic for section in self.sections for topic in section.topics]
+
+    @property
     def files(self) -> list[File]:
         return [file for section in self.sections for file in section.files]
+
+    def find_file(self, path):
+        abspath = path.resolve()
+        for file in self.files:
+            if file.path.resolve() == abspath:
+                return file
+        return None
+
+    def add_file(self, path: Path):
+        for topic in self.topics:
+            if topic.matches_path(path, False):
+                topic.add_file(path)
+                return
+        logger.error(f"File not in course structure: {path}")
 
     @property
     def notebooks(self) -> list[Notebook]:
@@ -113,6 +147,34 @@ class Course:
         if not self._nats_connection:
             self._nats_connection = await connect_client_with_retry(NATS_URL)
         return self._nats_connection
+
+    async def on_file_moved(self, src_path: Path, dest_path: Path):
+        logger.debug(f"On file moved: {src_path} -> {dest_path}")
+        await self.on_file_deleted(src_path)
+        await self.on_file_created(dest_path)
+
+    async def on_file_created(self, path: Path):
+        logger.debug(f"On file created: {path}")
+        self.add_file(path)
+        await self.process_file(path)
+
+    async def on_file_deleted(self, file_to_delete: Path):
+        logger.debug(f"On file deleted: {file_to_delete}")
+        file = self.find_file(file_to_delete)
+        if not file:
+            logger.debug(f"File not / no longer in course: {file_to_delete}")
+            return
+        await file.delete()
+
+    async def process_file(self, path: Path):
+        logging.debug(f"Processing changed file {path}")
+        file = self.find_file(path)
+        if not file:
+            logger.error(f"File not in course: {path}")
+            return
+        op = await file.get_processing_operation(self.output_root)
+        await op.exec()
+        logger.debug(f"Processed file {path}")
 
     async def process_all(self):
         logger.debug(f"Processing all files for {self.course_root}")
@@ -164,9 +226,8 @@ class Course:
 
     def _add_generated_sources(self):
         logger.debug("Adding generated sources.")
-        for section in self.sections:
-            for topic in section.topics:
-                for file in topic.files:
-                    for new_file in file.generated_sources:
-                        topic.add_file(new_file)
-                        logger.debug(f"Added generated source: {new_file}")
+        for topic in self.topics:
+            for file in topic.files:
+                for new_file in file.generated_sources:
+                    topic.add_file(new_file)
+                    logger.debug(f"Added generated source: {new_file}")

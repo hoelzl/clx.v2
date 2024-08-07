@@ -1,6 +1,7 @@
+import asyncio
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Coroutine, TYPE_CHECKING
 
 from attrs import define, field
 
@@ -8,7 +9,6 @@ from clx.file_ops import (
     ConvertDrawIoFile,
     ConvertPlantUmlFile,
     CopyFileOperation,
-    DeleteFileOperation,
     ProcessNotebookOperation,
 )
 from clx.operation import Concurrently, NoOperation, Operation
@@ -70,14 +70,13 @@ class File:
     async def get_processing_operation(self, _target_dir: Path) -> Operation:
         return NoOperation()
 
-    def delete_op(self) -> Operation:
-        if self.generated_outputs:
-            return Concurrently(
-                DeleteFileOperation(file=self, file_to_delete=file)
-                for file in self.generated_outputs
-            )
-        return NoOperation()
-
+    async def delete(self) -> None:
+        course_actions = []
+        for go in self.generated_outputs:
+            course_actions.append(self.course.on_file_deleted(go))
+            go.unlink(missing_ok=True)
+        self.generated_outputs.clear()
+        await asyncio.gather(*course_actions, return_exceptions=True)
 
 @define
 class PlantUmlFile(File):

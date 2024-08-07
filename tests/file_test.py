@@ -87,7 +87,6 @@ def test_file_from_path_data_file(course, section_1, topic_1):
     assert unit.relative_path == Path("data/test.data")
     assert unit.generated_outputs == set()
     assert unit.generated_sources == frozenset()
-    assert unit.delete_op() == NoOperation()
 
 
 async def test_file_from_path_data_file_operations(course, topic_1):
@@ -130,8 +129,6 @@ async def test_file_from_path_notebook_operations(course, topic_1):
     file_path = topic_1.path / NOTEBOOK_FILE
 
     unit = File.from_path(course, file_path, topic_1)
-
-    assert unit.delete_op() == NoOperation()
 
     process_op = await unit.get_processing_operation(course.output_root)
     assert isinstance(process_op, Concurrently)

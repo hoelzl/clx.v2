@@ -8,8 +8,7 @@ import nats
 from attr import frozen
 
 from clx.operation import Operation
-from clx.utils.nats_utils import NATS_URL, connect_client_with_retry, \
-    process_image_request
+from clx.utils.nats_utils import process_image_request
 
 if TYPE_CHECKING:
     from clx.file import DataFile, DrawIoFile, File, Notebook, PlantUmlFile
