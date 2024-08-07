@@ -3,7 +3,7 @@ import io
 from clx.course_spec import CourseSpec, TopicSpec, parse_multilang
 from clx.utils.text_utils import Text
 
-from course_fixtures import COURSE_XML, course_xml
+from conftest import COURSE_XML, course_xml
 
 
 def test_parse_multilang(course_xml):

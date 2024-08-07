@@ -4,8 +4,8 @@ from xml.etree import ElementTree as ETree
 
 import pytest
 
-from clx.course import Course
-from clx.course_spec import CourseSpec
+from clx.course import Course, Section, Topic
+from clx.utils.text_utils import Text
 
 COURSE_XML = """
 <course>
@@ -50,10 +50,6 @@ COURSE_XML = """
 </course>
 """
 DATA_DIR = Path(__file__).parent / "data"
-OUTPUT_DIR = Path("/output")
-COURSE_SPEC_STREAM = io.StringIO(COURSE_XML)
-COURSE_SPEC = CourseSpec.from_file(COURSE_SPEC_STREAM)
-COURSE = Course(COURSE_SPEC, DATA_DIR, OUTPUT_DIR)
 
 
 @pytest.fixture
@@ -71,4 +67,15 @@ def course_spec():
 
 @pytest.fixture
 def course(course_spec):
-    return Course(course_spec, DATA_DIR, OUTPUT_DIR)
+    return Course(course_spec, DATA_DIR, Path("/output"))
+
+
+@pytest.fixture
+def section_1(course):
+    return Section(name=Text(en="Week 1", de="Woche 1"), course=course)
+
+
+@pytest.fixture
+def topic_1(section_1):
+    path = DATA_DIR / "slides/module_000_test_1/topic_100_some_topic_from_test_1"
+    return Topic(id="some_topic", section=section_1, path=path)

@@ -3,7 +3,6 @@ from pathlib import Path
 from clx.course import Course
 from clx.file import Notebook
 from clx.utils.text_utils import Text
-from course_fixtures import course_spec
 
 
 DATA_DIR = Path(__file__).parent / "data"

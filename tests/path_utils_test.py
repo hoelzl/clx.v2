@@ -1,7 +1,5 @@
 from pathlib import Path
 
-from tests.course_fixtures import course, course_spec # noqa
-
 from clx.utils.path_utils import Format, Lang, Mode, is_slides_file, output_specs
 
 
