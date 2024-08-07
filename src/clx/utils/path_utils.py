@@ -2,10 +2,14 @@ import logging
 import re
 from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from attrs import frozen, field
 
-from clx.utils.text_utils import as_dir_name
+from clx.utils.text_utils import as_dir_name, sanitize_file_name
+
+if TYPE_CHECKING:
+    from clx.course import Course
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +120,7 @@ def ext_for(format_: str | Format) -> str:
 
 @frozen
 class OutputSpec:
+    course: "Course"
     lang: str = field(converter=str)
     format: str = field(converter=str)
     mode: str = field(converter=str)
@@ -127,18 +132,24 @@ class OutputSpec:
         format_ = as_dir_name(self.format, self.lang)
         mode = as_dir_name(self.mode, self.lang)
         object.__setattr__(
-            self, "output_dir", self.root_dir / f"{lang}/{format_}/{mode}"
+            self,
+            "output_dir",
+            self.root_dir
+            / f"{lang}"
+            / sanitize_file_name(self.course.name[self.lang])
+            / f"{format_}/{mode}",
         )
 
     def __iter__(self):
         return iter((self.lang, self.format, self.mode, self.output_dir))
 
 
-def output_specs(root_dir: Path):
+def output_specs(course: "Course", root_dir: Path) -> OutputSpec:
     for lang_dir in [Lang.DE, Lang.EN]:
         for format_dir in [Format.HTML, Format.NOTEBOOK]:
             for mode_dir in [Mode.CODE_ALONG, Mode.COMPLETED]:
                 yield OutputSpec(
+                    course=course,
                     lang=lang_dir,
                     format=format_dir,
                     mode=mode_dir,
@@ -146,6 +157,7 @@ def output_specs(root_dir: Path):
                 )
     for lang_dir in [Lang.DE, Lang.EN]:
         yield OutputSpec(
+            course=course,
             lang=lang_dir,
             format=Format.CODE,
             mode=Mode.COMPLETED,

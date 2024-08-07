@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from tests.course_fixtures import course, course_spec # noqa
+
 from clx.utils.path_utils import Format, Lang, Mode, is_slides_file, output_specs
 
 
@@ -11,8 +13,8 @@ def test_is_slides_file():
     assert not is_slides_file(Path("test.py"))
 
 
-def test_output_spec():
-    unit = list(output_specs(Path("slides_1.py")))
+def test_output_spec(course):
+    unit = list(output_specs(course, Path("slides_1.py")))
     assert len(unit) == 10
 
     # Half the outputs should be in each language.

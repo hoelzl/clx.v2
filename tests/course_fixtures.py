@@ -1,7 +1,11 @@
 import io
+from pathlib import Path
 from xml.etree import ElementTree as ETree
 
 import pytest
+
+from clx.course import Course
+from clx.course_spec import CourseSpec
 
 COURSE_XML = """
 <course>
@@ -10,8 +14,8 @@ COURSE_XML = """
         <en>https://github.com/hoelzl/my-course-en</en>
     </github>
     <name>
-        <de>mein-kurs</de>
-        <en>my-course</en>
+        <de>Mein Kurs</de>
+        <en>My Course</en>
     </name>
     <prog-lang>python</prog-lang>
     <description>
@@ -25,8 +29,8 @@ COURSE_XML = """
     <sections>
         <section>
             <name>
-                <de>woche-1</de>
-                <en>week-1</en>
+                <de>Woche 1</de>
+                <en>Week 1</en>
             </name>
             <topics>
                 <topic>some_topic_from_test_1</topic>
@@ -35,8 +39,8 @@ COURSE_XML = """
         </section>
         <section>
             <name>
-                <de>woche-2</de>
-                <en>week-2</en>
+                <de>Woche 2</de>
+                <en>Week 2</en>
             </name>
             <topics>
                 <topic>another_topic_from_test_1</topic>
@@ -45,6 +49,11 @@ COURSE_XML = """
     </sections>
 </course>
 """
+DATA_DIR = Path(__file__).parent / "data"
+OUTPUT_DIR = Path("/output")
+COURSE_SPEC_STREAM = io.StringIO(COURSE_XML)
+COURSE_SPEC = CourseSpec.from_file(COURSE_SPEC_STREAM)
+COURSE = Course(COURSE_SPEC, DATA_DIR, OUTPUT_DIR)
 
 
 @pytest.fixture
@@ -58,3 +67,8 @@ def course_spec():
     xml_stream = io.StringIO(COURSE_XML)
 
     return CourseSpec.from_file(xml_stream)
+
+
+@pytest.fixture
+def course(course_spec):
+    return Course(course_spec, DATA_DIR, OUTPUT_DIR)

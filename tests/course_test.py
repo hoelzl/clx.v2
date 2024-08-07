@@ -7,10 +7,11 @@ from course_fixtures import course_spec
 
 
 DATA_DIR = Path(__file__).parent / "data"
+OUTPUT_DIR = Path(__file__).parent / "output"
 
 
 def test_build_topic_map(course_spec):
-    course = Course(course_spec, DATA_DIR)
+    course = Course(course_spec, DATA_DIR, OUTPUT_DIR)
     course._build_topic_map()
     assert len(course._topic_map) == 3
 
@@ -28,12 +29,12 @@ def test_build_topic_map(course_spec):
 
 
 def test_course_from_spec(course_spec):
-    course = Course.from_spec(course_spec, DATA_DIR)
+    course = Course.from_spec(course_spec, DATA_DIR, OUTPUT_DIR)
     assert len(course.sections) == 2
 
     section_1 = course.sections[0]
     assert len(section_1.topics) == 2
-    assert section_1.name == Text(de="woche-1", en="week-1")
+    assert section_1.name == Text(de="Woche 1", en="Week 1")
 
     topic_11 = section_1.topics[0]
     assert topic_11.id == "some_topic_from_test_1"
@@ -67,7 +68,7 @@ def test_course_from_spec(course_spec):
 
 
 def test_course_files(course_spec):
-    course = Course.from_spec(course_spec, DATA_DIR)
+    course = Course.from_spec(course_spec, DATA_DIR, OUTPUT_DIR)
 
     assert len(course.files) == 9
     assert {file.path.name for file in course.files} == {
@@ -84,7 +85,7 @@ def test_course_files(course_spec):
 
 
 def test_course_notebooks(course_spec):
-    course = Course.from_spec(course_spec, DATA_DIR)
+    course = Course.from_spec(course_spec, DATA_DIR, OUTPUT_DIR)
 
     assert len(course.notebooks) == 3
 

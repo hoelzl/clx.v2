@@ -20,6 +20,10 @@ class Topic:
     _file_map: dict[Path, File] = Factory(dict)
 
     @property
+    def course(self) -> "Course":
+        return self.section.course
+
+    @property
     def files(self) -> list[File]:
         return list(self._file_map.values())
 
@@ -37,7 +41,7 @@ class Topic:
         if path.is_dir():
             logger.error(f"Trying to add a directory to topic {self.id!r}: {path}")
             return
-        self._file_map[path] = File.from_path(path, self)
+        self._file_map[path] = File.from_path(self.course, path, self)
 
     def build_file_map(self):
         logger.debug(f"Building file map for {self.path}")
@@ -52,6 +56,7 @@ class Topic:
 @define
 class Section:
     name: Text
+    course: "Course"
     topics: list[Topic] = Factory(list)
 
     @property
@@ -71,16 +76,26 @@ class Section:
 class Course:
     spec: CourseSpec
     course_root: Path
+    output_root: Path
     sections: list[Section] = Factory(list)
     _topic_map: dict[str, Path] = Factory(dict)
 
     @classmethod
-    def from_spec(cls, spec: CourseSpec, course_root: Path) -> "Course":
-        logger.debug(f"Creating course from spec {spec} at {course_root}")
-        course = cls(spec, course_root)
+    def from_spec(
+        cls, spec: CourseSpec, course_root: Path, output_root: Path | None
+    ) -> "Course":
+        if output_root is None:
+            output_root = course_root / "output"
+        logger.debug(f"Creating course from spec {spec}: "
+                     f"{course_root} -> {output_root}")
+        course = cls(spec, course_root, output_root)
         course._build_sections()
         course._add_generated_sources()
         return course
+
+    @property
+    def name(self) -> Text:
+        return self.spec.name
 
     @property
     def files(self) -> list[File]:
@@ -97,7 +112,7 @@ class Course:
             operations = []
             for file in self.files:
                 if file.execution_stage == stage:
-                    operations.append(file.process_op(self.course_root))
+                    operations.append(file.get_processing_operation(self.output_root))
             await asyncio.gather(
                 *[op.exec() for op in operations], return_exceptions=True
             )
@@ -107,7 +122,7 @@ class Course:
         logger.debug(f"Building sections for {self.course_root}")
         self._build_topic_map()
         for section_spec in self.spec.sections:
-            section = Section(name=section_spec.name)
+            section = Section(name=section_spec.name, course=self)
             self._build_topics(section, section_spec)
             section.add_notebook_numbers()
             self.sections.append(section)

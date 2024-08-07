@@ -8,12 +8,16 @@ from attrs import define, field, frozen
 from clx.operation import Concurrently, NoOperation, Operation
 from clx.utils.execution_uils import FIRST_EXECUTION_STAGE, LAST_EXECUTION_STAGE
 from clx.utils.notebook_utils import find_notebook_titles
-from clx.utils.path_utils import (PLANTUML_EXTENSIONS, ext_for, is_slides_file,
-                                  output_specs, )
+from clx.utils.path_utils import (
+    PLANTUML_EXTENSIONS,
+    ext_for,
+    is_slides_file,
+    output_specs,
+)
 from clx.utils.text_utils import Text
 
 if TYPE_CHECKING:
-    from clx.course import Section, Topic
+    from clx.course import Course, Section, Topic
 
 logger = logging.getLogger(__name__)
 
@@ -34,18 +38,19 @@ class DeleteFileOperation(Operation):
 
 @define
 class File:
+    course: "Course"
     path: Path
     topic: "Topic"
     generated_outputs: set[Path] = field(factory=set)
 
     @staticmethod
-    def from_path(file: Path, topic: "Topic") -> "File":
+    def from_path(course: "Course", file: Path, topic: "Topic") -> "File":
         cls: type[File] = _find_file_class(file)
-        return cls._from_path(file, topic)
+        return cls._from_path(course, file, topic)
 
     @classmethod
-    def _from_path(cls, file: Path, topic: "Topic") -> "File":
-        return cls(path=file, topic=topic)
+    def _from_path(cls, course: "Course", file: Path, topic: "Topic") -> "File":
+        return cls(course=course, path=file, topic=topic)
 
     @property
     def execution_stage(self) -> int:
@@ -69,7 +74,7 @@ class File:
     def generated_sources(self) -> frozenset[Path]:
         return frozenset()
 
-    def process_op(self, _target_dir: Path) -> Operation:
+    def get_processing_operation(self, _target_dir: Path) -> Operation:
         return NoOperation()
 
     def delete_op(self) -> Operation:
@@ -87,15 +92,17 @@ class ConvertPlantUmlFile(Operation):
     output_file: Path
 
     async def exec(self, *args, **kwargs) -> None:
-        logger.info(f"Converting PlantUML file {self.input_file.relative_path} "
-                    f"to {self.output_file}")
+        logger.info(
+            f"Converting PlantUML file {self.input_file.relative_path} "
+            f"to {self.output_file}"
+        )
         await asyncio.sleep(OP_DURATION)
         self.input_file.generated_outputs.add(self.output_file)
 
 
 @define
 class PlantUmlFile(File):
-    def process_op(self, _target_dir: Path) -> Operation:
+    def get_processing_operation(self, _target_dir: Path) -> Operation:
         return ConvertPlantUmlFile(input_file=self, output_file=self.img_path)
 
     @property
@@ -113,15 +120,17 @@ class ConvertDrawIoFile(Operation):
     output_file: Path
 
     async def exec(self, *args, **kwargs) -> Any:
-        logger.info(f"Converting DrawIO file {self.input_file.relative_path} "
-                    f"to {self.output_file}")
+        logger.info(
+            f"Converting DrawIO file {self.input_file.relative_path} "
+            f"to {self.output_file}"
+        )
         await asyncio.sleep(OP_DURATION)
         self.input_file.generated_outputs.add(self.output_file)
 
 
 @define
 class DrawIoFile(File):
-    def process_op(self, _target_dir: Path) -> Operation:
+    def get_processing_operation(self, _target_dir: Path) -> Operation:
         return ConvertDrawIoFile(input_file=self, output_file=self.img_path)
 
     @property
@@ -151,13 +160,13 @@ class DataFile(File):
     def execution_stage(self) -> int:
         return LAST_EXECUTION_STAGE
 
-    def process_op(self, target_dir: Path) -> Operation:
+    def get_processing_operation(self, target_dir: Path) -> Operation:
         return Concurrently(
             CopyFileOperation(
                 input_file=self,
                 output_file=self.output_dir(output_dir, lang) / self.relative_path,
             )
-            for lang, _, _, output_dir in output_specs(target_dir)
+            for lang, _, _, output_dir in output_specs(self.course, target_dir)
         )
 
 
@@ -170,8 +179,10 @@ class ProcessNotebookOperation(Operation):
     mode: str
 
     async def exec(self, *args, **kwargs) -> Any:
-        logger.info(f"Processing notebook {self.input_file.relative_path} "
-                    f"to {self.output_file}")
+        logger.info(
+            f"Processing notebook {self.input_file.relative_path} "
+            f"to {self.output_file}"
+        )
         await asyncio.sleep(OP_DURATION)
         self.input_file.generated_outputs.add(self.output_file)
 
@@ -182,12 +193,12 @@ class Notebook(File):
     number_in_section: int = 0
 
     @classmethod
-    def _from_path(cls, file: Path, topic: "Topic") -> "Notebook":
+    def _from_path(cls, course: "Course", file: Path, topic: "Topic") -> "Notebook":
         text = file.read_text()
         title = find_notebook_titles(text, default=file.stem)
-        return cls(path=file, topic=topic, title=title)
+        return cls(course=course, path=file, topic=topic, title=title)
 
-    def process_op(self, target_dir: Path) -> Operation:
+    def get_processing_operation(self, target_dir: Path) -> Operation:
         return Concurrently(
             ProcessNotebookOperation(
                 input_file=self,
@@ -199,7 +210,7 @@ class Notebook(File):
                 format=format_,
                 mode=mode,
             )
-            for lang, format_, mode, output_dir in output_specs(target_dir)
+            for lang, format_, mode, output_dir in output_specs(self.course, target_dir)
         )
 
     def file_name(self, lang: str, ext: str) -> str:
