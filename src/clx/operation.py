@@ -20,14 +20,13 @@ class NoOperation(Operation):
         super().__init__()
 
 
-
 @frozen
 class Sequential(Operation):
     operations: Iterable[Operation]
 
     async def exec(self, *args, **kwargs) -> Any:
         for operation in self.operations:
-            await operation.exec()
+            await operation.exec(*args, **kwargs)
 
     def __attrs_pre_init__(self, *args, **kwargs):
         super().__init__()
@@ -38,7 +37,9 @@ class Concurrently(Operation):
     operations: Iterable[Operation] = field(converter=list)
 
     async def exec(self, *args, **kwargs) -> Any:
-        await asyncio.gather(*[operation.exec() for operation in self.operations])
+        await asyncio.gather(
+            *[operation.exec(*args, **kwargs) for operation in self.operations]
+        )
 
     def __attrs_pre_init__(self, *args, **kwargs):
         super().__init__()

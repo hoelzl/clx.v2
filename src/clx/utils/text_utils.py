@@ -1,5 +1,9 @@
+import logging
+
 from attr import define
 
+
+logger = logging.getLogger(__name__)
 
 @define
 class Text:

@@ -1,9 +1,13 @@
 import io
+import logging
+
 from pathlib import Path
 from xml.etree import ElementTree as ETree
 
 from attr import Factory, frozen
 from clx.utils.text_utils import Text, as_dir_name
+
+logger = logging.getLogger(__name__)
 
 
 @frozen

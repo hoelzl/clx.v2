@@ -1,39 +1,42 @@
 import asyncio
+import logging
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
-from attrs import define, frozen
-
+from attrs import define, field, frozen
 
 from clx.operation import Concurrently, NoOperation, Operation
+from clx.utils.execution_uils import FIRST_EXECUTION_STAGE, LAST_EXECUTION_STAGE
 from clx.utils.notebook_utils import find_notebook_titles
-from clx.utils.path_utils import (
-    PLANTUML_EXTENSIONS,
-    ext_for,
-    is_slides_file,
-    output_specs,
-)
+from clx.utils.path_utils import (PLANTUML_EXTENSIONS, ext_for, is_slides_file,
+                                  output_specs, )
 from clx.utils.text_utils import Text
 
 if TYPE_CHECKING:
     from clx.course import Section, Topic
 
+logger = logging.getLogger(__name__)
+
+
+OP_DURATION = 0.01
+
 
 @frozen
 class DeleteFileOperation(Operation):
+    file: "File"
     file_to_delete: Path
 
-    async def exec(self, file: "File", *args, **kwargs) -> Any:
-        print(f"Deleting {self.file_to_delete.as_posix()}")
-        await asyncio.sleep(1)
-        file.processing_results.remove(self.file_to_delete)
+    async def exec(self, *args, **kwargs) -> None:
+        logger.info(f"Deleting {self.file_to_delete}")
+        await asyncio.sleep(OP_DURATION)
+        self.file.generated_outputs.remove(self.file_to_delete)
 
 
 @define
 class File:
     path: Path
     topic: "Topic"
-    processing_results: set[Path] = []
+    generated_outputs: set[Path] = field(factory=set)
 
     @staticmethod
     def from_path(file: Path, topic: "Topic") -> "File":
@@ -45,24 +48,35 @@ class File:
         return cls(path=file, topic=topic)
 
     @property
+    def execution_stage(self) -> int:
+        return FIRST_EXECUTION_STAGE
+
+    @property
+    def section(self) -> "Section":
+        return self.topic.section
+
+    @property
     def relative_path(self) -> Path:
         return self.path.relative_to(self.topic.path)
 
     def output_dir(self, target_dir: Path, lang: str) -> Path:
         return target_dir / self.section.name[lang]
 
+    # TODO: Maybe find a better naming convention
+    # The generated_outputs are the outputs we have actually generated
+    # The generated sources are source-files we *can* generate
     @property
-    def section(self) -> "Section":
-        return self.topic.section
+    def generated_sources(self) -> frozenset[Path]:
+        return frozenset()
 
     def process_op(self, _target_dir: Path) -> Operation:
         return NoOperation()
 
     def delete_op(self) -> Operation:
-        if self.processing_results:
+        if self.generated_outputs:
             return Concurrently(
-                DeleteFileOperation(file_to_delete=file)
-                for file in self.processing_results
+                DeleteFileOperation(file=self, file_to_delete=file)
+                for file in self.generated_outputs
             )
         return NoOperation()
 
@@ -72,10 +86,11 @@ class ConvertPlantUmlFile(Operation):
     input_file: "PlantUmlFile"
     output_file: Path
 
-    async def exec(self, file: File, *args, **kwargs) -> Any:
-        print(f"Converting PlantUML file {self.input_file.path} to {self.output_file}")
-        await asyncio.sleep(1)
-        file.processing_results.add(self.output_file)
+    async def exec(self, *args, **kwargs) -> None:
+        logger.info(f"Converting PlantUML file {self.input_file.relative_path} "
+                    f"to {self.output_file}")
+        await asyncio.sleep(OP_DURATION)
+        self.input_file.generated_outputs.add(self.output_file)
 
 
 @define
@@ -85,7 +100,11 @@ class PlantUmlFile(File):
 
     @property
     def img_path(self) -> Path:
-        return (self.path.parents[1] / "img").with_suffix(".png")
+        return (self.path.parents[1] / "img" / self.path.stem).with_suffix(".png")
+
+    @property
+    def generated_sources(self) -> frozenset[Path]:
+        return frozenset({self.img_path})
 
 
 @frozen
@@ -93,10 +112,11 @@ class ConvertDrawIoFile(Operation):
     input_file: "DrawIoFile"
     output_file: Path
 
-    async def exec(self, file: File, *args, **kwargs) -> Any:
-        print(f"Converting DrawIO file {self.input_file.path} to {self.output_file}")
-        await asyncio.sleep(1)
-        file.processing_results.add(self.output_file)
+    async def exec(self, *args, **kwargs) -> Any:
+        logger.info(f"Converting DrawIO file {self.input_file.relative_path} "
+                    f"to {self.output_file}")
+        await asyncio.sleep(OP_DURATION)
+        self.input_file.generated_outputs.add(self.output_file)
 
 
 @define
@@ -106,7 +126,11 @@ class DrawIoFile(File):
 
     @property
     def img_path(self) -> Path:
-        return (self.path.parents[1] / "img").with_suffix(".png")
+        return (self.path.parents[1] / "img" / self.path.stem).with_suffix(".png")
+
+    @property
+    def generated_sources(self) -> frozenset[Path]:
+        return frozenset({self.img_path})
 
 
 @frozen
@@ -114,14 +138,19 @@ class CopyFileOperation(Operation):
     input_file: "DataFile"
     output_file: Path
 
-    async def exec(self, file: File, *args, **kwargs) -> Any:
-        print(f"Copying {self.input_file} to {self.output_file}")
-        await asyncio.sleep(1)
-        file.processing_results.add(self.output_file)
+    async def exec(self, *args, **kwargs) -> Any:
+        logger.info(f"Copying {self.input_file.relative_path} to {self.output_file}")
+        await asyncio.sleep(OP_DURATION)
+        self.input_file.generated_outputs.add(self.output_file)
 
 
 @define
 class DataFile(File):
+
+    @property
+    def execution_stage(self) -> int:
+        return LAST_EXECUTION_STAGE
+
     def process_op(self, target_dir: Path) -> Operation:
         return Concurrently(
             CopyFileOperation(
@@ -140,10 +169,11 @@ class ProcessNotebookOperation(Operation):
     format: str
     mode: str
 
-    async def exec(self, file: File, *args, **kwargs) -> Any:
-        print(f"Processing notebook {self.input_file.path} to {self.output_file}")
-        await asyncio.sleep(1)
-        file.processing_results.add(self.output_file)
+    async def exec(self, *args, **kwargs) -> Any:
+        logger.info(f"Processing notebook {self.input_file.relative_path} "
+                    f"to {self.output_file}")
+        await asyncio.sleep(OP_DURATION)
+        self.input_file.generated_outputs.add(self.output_file)
 
 
 @define

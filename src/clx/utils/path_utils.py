@@ -1,3 +1,4 @@
+import logging
 import re
 from enum import StrEnum
 from pathlib import Path
@@ -6,9 +7,11 @@ from attrs import frozen, field
 
 from clx.utils.text_utils import as_dir_name
 
+logger = logging.getLogger(__name__)
+
 SLIDES_PREFIX = "slides_"
 
-SKIP_DIRS = frozenset(
+SKIP_DIRS_FOR_COURSE = frozenset(
     (
         "__pycache__",
         ".git",
@@ -22,8 +25,6 @@ SKIP_DIRS = frozenset(
         ".idea",
         "build",
         "dist",
-        "pu",
-        "drawio",
         ".cargo",
         ".idea",
         ".vscode",
@@ -33,7 +34,9 @@ SKIP_DIRS = frozenset(
     )
 )
 
-PLANTUML_EXTENSIONS = {".pu", ".puml", ".plantuml"}
+SKIP_DIRS_FOR_OUTPUT = SKIP_DIRS_FOR_COURSE | frozenset({"pu", "drawio"})
+
+PLANTUML_EXTENSIONS = frozenset({".pu", ".puml", ".plantuml"})
 
 SUPPORTED_PROG_LANG_EXTENSIONS = frozenset(
     (
@@ -58,9 +61,18 @@ def is_slides_file(input_path: Path) -> bool:
     )
 
 
-def is_ignored_dir(dir_path: Path) -> bool:
+def is_ignored_dir_for_course(dir_path: Path) -> bool:
     for part in dir_path.parts:
-        if part in SKIP_DIRS:
+        if part in SKIP_DIRS_FOR_COURSE:
+            return True
+        if re.match(IGNORE_PATH_REGEX, part):
+            return True
+    return False
+
+
+def is_ignored_dir_for_output(dir_path: Path) -> bool:
+    for part in dir_path.parts:
+        if part in SKIP_DIRS_FOR_OUTPUT:
             return True
         if re.match(IGNORE_PATH_REGEX, part):
             return True
@@ -72,7 +84,6 @@ def simplify_ordered_name(name: str, prefix: str | None = None) -> str:
     if prefix:
         assert parts[0] == prefix
     return "_".join(parts[2:])
-
 
 
 class Lang(StrEnum):
