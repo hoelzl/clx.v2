@@ -281,7 +281,7 @@ def create_output_spec(output_type: str, *args, **kwargs):
     match output_type.lower():
         case "completed":
             spec_type = CompletedOutput
-        case "codealong":
+        case "code-along":
             spec_type = CodeAlongOutput
         case "speaker":
             spec_type = SpeakerOutput
@@ -298,7 +298,7 @@ def create_output_specs(
     prog_lang="python",
     languages=("de", "en"),
     notebook_formats=("notebook", "code", "html"),
-    output_types=("completed", "codealong", "speaker"),
+    output_types=("completed", "code-along", "speaker"),
 ):
     result = []
     for lang in languages:

@@ -1,11 +1,14 @@
 import io
 from pathlib import Path
+from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ETree
 
 import pytest
 
-from clx.course import Course, Section, Topic
 from clx.utils.text_utils import Text
+
+if TYPE_CHECKING:
+    from clx.course import Course, Section, Topic
 
 COURSE_XML = """
 <course>
@@ -67,15 +70,18 @@ def course_spec():
 
 @pytest.fixture
 def course(course_spec):
+    from clx.course import Course
     return Course(course_spec, DATA_DIR, Path("/output"))
 
 
 @pytest.fixture
 def section_1(course):
+    from clx.course import Section
     return Section(name=Text(en="Week 1", de="Woche 1"), course=course)
 
 
 @pytest.fixture
 def topic_1(section_1):
+    from clx.course import Topic
     path = DATA_DIR / "slides/module_000_test_1/topic_100_some_topic_from_test_1"
     return Topic(id="some_topic", section=section_1, path=path)

@@ -2,17 +2,13 @@ from pathlib import Path
 from typing import cast
 
 from clx.course import Section, Topic
-from clx.file import (
-    ConvertDrawIoFile,
-    ConvertPlantUmlFile,
-    CopyFileOperation,
-    DataFile,
+from clx.file import (DataFile,
     DrawIoFile,
     File,
     Notebook,
-    PlantUmlFile,
-    ProcessNotebookOperation,
-)
+    PlantUmlFile, )
+from clx.file_ops import ConvertDrawIoFile, ConvertPlantUmlFile, CopyFileOperation, \
+    ProcessNotebookOperation
 from clx.operation import Concurrently, NoOperation
 from clx.utils.path_utils import output_specs
 

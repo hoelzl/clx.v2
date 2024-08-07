@@ -1,10 +1,11 @@
-import asyncio
 import logging
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
-from attrs import define, field, frozen
+from attrs import define, field
 
+from clx.file_ops import ConvertDrawIoFile, ConvertPlantUmlFile, CopyFileOperation, \
+    DeleteFileOperation, ProcessNotebookOperation
 from clx.operation import Concurrently, NoOperation, Operation
 from clx.utils.execution_uils import FIRST_EXECUTION_STAGE, LAST_EXECUTION_STAGE
 from clx.utils.notebook_utils import find_notebook_titles
@@ -20,20 +21,6 @@ if TYPE_CHECKING:
     from clx.course import Course, Section, Topic
 
 logger = logging.getLogger(__name__)
-
-
-OP_DURATION = 0.01
-
-
-@frozen
-class DeleteFileOperation(Operation):
-    file: "File"
-    file_to_delete: Path
-
-    async def exec(self, *args, **kwargs) -> None:
-        logger.info(f"Deleting {self.file_to_delete}")
-        await asyncio.sleep(OP_DURATION)
-        self.file.generated_outputs.remove(self.file_to_delete)
 
 
 @define
@@ -86,20 +73,6 @@ class File:
         return NoOperation()
 
 
-@frozen
-class ConvertPlantUmlFile(Operation):
-    input_file: "PlantUmlFile"
-    output_file: Path
-
-    async def exec(self, *args, **kwargs) -> None:
-        logger.info(
-            f"Converting PlantUML file {self.input_file.relative_path} "
-            f"to {self.output_file}"
-        )
-        await asyncio.sleep(OP_DURATION)
-        self.input_file.generated_outputs.add(self.output_file)
-
-
 @define
 class PlantUmlFile(File):
     def get_processing_operation(self, _target_dir: Path) -> Operation:
@@ -114,20 +87,6 @@ class PlantUmlFile(File):
         return frozenset({self.img_path})
 
 
-@frozen
-class ConvertDrawIoFile(Operation):
-    input_file: "DrawIoFile"
-    output_file: Path
-
-    async def exec(self, *args, **kwargs) -> Any:
-        logger.info(
-            f"Converting DrawIO file {self.input_file.relative_path} "
-            f"to {self.output_file}"
-        )
-        await asyncio.sleep(OP_DURATION)
-        self.input_file.generated_outputs.add(self.output_file)
-
-
 @define
 class DrawIoFile(File):
     def get_processing_operation(self, _target_dir: Path) -> Operation:
@@ -140,17 +99,6 @@ class DrawIoFile(File):
     @property
     def generated_sources(self) -> frozenset[Path]:
         return frozenset({self.img_path})
-
-
-@frozen
-class CopyFileOperation(Operation):
-    input_file: "DataFile"
-    output_file: Path
-
-    async def exec(self, *args, **kwargs) -> Any:
-        logger.info(f"Copying {self.input_file.relative_path} to {self.output_file}")
-        await asyncio.sleep(OP_DURATION)
-        self.input_file.generated_outputs.add(self.output_file)
 
 
 @define
@@ -168,23 +116,6 @@ class DataFile(File):
             )
             for lang, _, _, output_dir in output_specs(self.course, target_dir)
         )
-
-
-@frozen
-class ProcessNotebookOperation(Operation):
-    input_file: "Notebook"
-    output_file: Path
-    lang: str
-    format: str
-    mode: str
-
-    async def exec(self, *args, **kwargs) -> Any:
-        logger.info(
-            f"Processing notebook {self.input_file.relative_path} "
-            f"to {self.output_file}"
-        )
-        await asyncio.sleep(OP_DURATION)
-        self.input_file.generated_outputs.add(self.output_file)
 
 
 @define
