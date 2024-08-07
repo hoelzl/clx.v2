@@ -4,14 +4,20 @@ from typing import TYPE_CHECKING
 
 from attrs import define, field
 
-from clx.file_ops import ConvertDrawIoFile, ConvertPlantUmlFile, CopyFileOperation, \
-    DeleteFileOperation, ProcessNotebookOperation
+from clx.file_ops import (
+    ConvertDrawIoFile,
+    ConvertPlantUmlFile,
+    CopyFileOperation,
+    DeleteFileOperation,
+    ProcessNotebookOperation,
+)
 from clx.operation import Concurrently, NoOperation, Operation
 from clx.utils.execution_uils import FIRST_EXECUTION_STAGE, LAST_EXECUTION_STAGE
 from clx.utils.notebook_utils import find_notebook_titles
 from clx.utils.path_utils import (
     PLANTUML_EXTENSIONS,
     ext_for,
+    extension_to_prog_lang,
     is_slides_file,
     output_specs,
 )
@@ -61,7 +67,7 @@ class File:
     def generated_sources(self) -> frozenset[Path]:
         return frozenset()
 
-    def get_processing_operation(self, _target_dir: Path) -> Operation:
+    async def get_processing_operation(self, _target_dir: Path) -> Operation:
         return NoOperation()
 
     def delete_op(self) -> Operation:
@@ -75,8 +81,12 @@ class File:
 
 @define
 class PlantUmlFile(File):
-    def get_processing_operation(self, _target_dir: Path) -> Operation:
-        return ConvertPlantUmlFile(input_file=self, output_file=self.img_path)
+    async def get_processing_operation(self, _target_dir: Path) -> Operation:
+        return ConvertPlantUmlFile(
+            input_file=self,
+            output_file=self.img_path,
+            nats_connection=await self.course.nats_connection(),
+        )
 
     @property
     def img_path(self) -> Path:
@@ -89,8 +99,12 @@ class PlantUmlFile(File):
 
 @define
 class DrawIoFile(File):
-    def get_processing_operation(self, _target_dir: Path) -> Operation:
-        return ConvertDrawIoFile(input_file=self, output_file=self.img_path)
+    async def get_processing_operation(self, _target_dir: Path) -> Operation:
+        return ConvertDrawIoFile(
+            input_file=self,
+            output_file=self.img_path,
+            nats_connection=await self.course.nats_connection(),
+        )
 
     @property
     def img_path(self) -> Path:
@@ -108,7 +122,7 @@ class DataFile(File):
     def execution_stage(self) -> int:
         return LAST_EXECUTION_STAGE
 
-    def get_processing_operation(self, target_dir: Path) -> Operation:
+    async def get_processing_operation(self, target_dir: Path) -> Operation:
         return Concurrently(
             CopyFileOperation(
                 input_file=self,
@@ -129,20 +143,27 @@ class Notebook(File):
         title = find_notebook_titles(text, default=file.stem)
         return cls(course=course, path=file, topic=topic, title=title)
 
-    def get_processing_operation(self, target_dir: Path) -> Operation:
+    async def get_processing_operation(self, target_dir: Path) -> Operation:
+        nc = await self.course.nats_connection()
         return Concurrently(
             ProcessNotebookOperation(
                 input_file=self,
                 output_file=(
                     self.output_dir(output_dir, lang)
-                    / self.file_name(lang, ext_for(format_))
+                    / self.file_name(lang, ext_for(format_, self.prog_lang))
                 ),
                 lang=lang,
                 format=format_,
                 mode=mode,
+                prog_lang=self.prog_lang,
+                nats_connection=nc,
             )
             for lang, format_, mode, output_dir in output_specs(self.course, target_dir)
         )
+
+    @property
+    def prog_lang(self) -> str:
+        return extension_to_prog_lang(self.path.suffix)
 
     def file_name(self, lang: str, ext: str) -> str:
         return f"{self.number_in_section:02} {self.title[lang]}{ext}"

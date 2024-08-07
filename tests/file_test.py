@@ -1,14 +1,19 @@
 from pathlib import Path
 from typing import cast
 
-from clx.course import Section, Topic
-from clx.file import (DataFile,
+from clx.file import (
+    DataFile,
     DrawIoFile,
     File,
     Notebook,
-    PlantUmlFile, )
-from clx.file_ops import ConvertDrawIoFile, ConvertPlantUmlFile, CopyFileOperation, \
-    ProcessNotebookOperation
+    PlantUmlFile,
+)
+from clx.file_ops import (
+    ConvertDrawIoFile,
+    ConvertPlantUmlFile,
+    CopyFileOperation,
+    ProcessNotebookOperation,
+)
 from clx.operation import Concurrently, NoOperation
 from clx.utils.path_utils import output_specs
 
@@ -33,12 +38,12 @@ def test_file_from_path_plant_uml(course, section_1, topic_1):
     assert unit.generated_sources == frozenset({expected_output})
 
 
-def test_file_from_path_plant_uml_operations(course, topic_1):
+async def test_file_from_path_plant_uml_operations(course, topic_1):
     file_path = topic_1.path / PLANT_UML_FILE
 
     unit = File.from_path(course, file_path, topic_1)
 
-    process_op = unit.get_processing_operation(course.output_root)
+    process_op = await unit.get_processing_operation(course.output_root)
     assert isinstance(process_op, ConvertPlantUmlFile)
     assert process_op.input_file == unit
     assert process_op.output_file == topic_1.path / "img/my_diag.png"
@@ -59,12 +64,12 @@ def test_file_from_path_drawio(course, section_1, topic_1):
     assert unit.generated_sources == frozenset({expected_output})
 
 
-def test_file_from_path_drawio_operations(course, topic_1):
+async def test_file_from_path_drawio_operations(course, topic_1):
     file_path = topic_1.path / DRAWIO_FILE
 
     unit = File.from_path(course, file_path, topic_1)
 
-    process_op = unit.get_processing_operation(course.output_root)
+    process_op = await unit.get_processing_operation(course.output_root)
     assert isinstance(process_op, ConvertDrawIoFile)
     assert process_op.input_file == unit
     assert process_op.output_file == topic_1.path / "img/my_drawing.png"
@@ -85,12 +90,12 @@ def test_file_from_path_data_file(course, section_1, topic_1):
     assert unit.delete_op() == NoOperation()
 
 
-def test_file_from_path_data_file_operations(course, topic_1):
+async def test_file_from_path_data_file_operations(course, topic_1):
     file_path = topic_1.path / DATA_FILE
 
     unit = File.from_path(course, file_path, topic_1)
 
-    process_op = unit.get_processing_operation(course.output_root)
+    process_op = await unit.get_processing_operation(course.output_root)
     assert isinstance(process_op, Concurrently)
 
     ops = cast(list[CopyFileOperation], list(process_op.operations))
@@ -118,16 +123,17 @@ def test_file_from_path_notebook(course, section_1, topic_1):
     assert unit.relative_path == Path(NOTEBOOK_FILE)
     assert unit.generated_outputs == set()
     assert unit.generated_sources == frozenset()
+    assert unit.prog_lang == "python"
 
 
-def test_file_from_path_notebook_operations(course, topic_1):
+async def test_file_from_path_notebook_operations(course, topic_1):
     file_path = topic_1.path / NOTEBOOK_FILE
 
     unit = File.from_path(course, file_path, topic_1)
 
     assert unit.delete_op() == NoOperation()
 
-    process_op = unit.get_processing_operation(course.output_root)
+    process_op = await unit.get_processing_operation(course.output_root)
     assert isinstance(process_op, Concurrently)
 
     ops = cast(list[ProcessNotebookOperation], list(process_op.operations))
@@ -154,7 +160,8 @@ async def test_data_file_generated_outputs(course, topic_1):
     unit = File.from_path(course, file_path, topic_1)
 
     output_dir = course.output_root
-    await unit.get_processing_operation(output_dir).exec()
+    op = await unit.get_processing_operation(output_dir)
+    await op.exec()
 
     assert unit.generated_sources == frozenset()
     assert unit.generated_outputs == {

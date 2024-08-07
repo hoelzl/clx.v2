@@ -1,17 +1,15 @@
-import asyncio
 import json
 import logging
-import os
 import shutil
-from base64 import b64decode
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
-import aiofiles
 import nats
 from attr import frozen
 
 from clx.operation import Operation
+from clx.utils.nats_utils import NATS_URL, connect_client_with_retry, \
+    process_image_request
 
 if TYPE_CHECKING:
     from clx.file import DataFile, DrawIoFile, File, Notebook, PlantUmlFile
@@ -20,44 +18,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 OP_DURATION = 0.01
-NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
-
-
-async def connect_client_with_retry(nats_url: str, num_retries: int = 5):
-    for i in range(num_retries):
-        try:
-            logger.debug(f"Trying to connect to NATS at {nats_url}")
-            nc = await nats.connect(nats_url)
-            logger.info(f"Connected to NATS at {nats_url}")
-            return nc
-        except Exception as e:
-            logger.error(f"Error connecting to NATS: {e}")
-            await asyncio.sleep(0.25 * 2**i)
-    raise OSError("Could not connect to NATS")
-
-
-async def process_image_request(file, service: str, nats_topic: str, timeout=120):
-    try:
-        nc = await connect_client_with_retry(NATS_URL)
-        payload = {
-            "data": file.input_file.path.read_text(),
-            "output_format": "png",
-        }
-        reply = await nc.request(
-            nats_topic, json.dumps(payload).encode(), timeout=timeout
-        )
-        logger.debug(f"{service}: Received reply: {reply.data[:40]}")
-        result = json.loads(reply.data.decode())
-        if isinstance(result, dict):
-            if png_base64 := result.get("result").encode():
-                logger.debug(
-                    f"{service}: PNG data: len = {len(png_base64)}, {png_base64[:20]}"
-                )
-                png = b64decode(png_base64)
-                logger.debug(f"{service}: Writing PNG data to {file.output_file}")
-                file.output_file.write_bytes(png)
-    except Exception as e:
-        logger.error(f"{service}: Error {e}")
 
 
 @frozen
@@ -75,6 +35,7 @@ class DeleteFileOperation(Operation):
 class ConvertPlantUmlFile(Operation):
     input_file: "PlantUmlFile"
     output_file: Path
+    nats_connection: nats.NATS
 
     async def exec(self, *args, **kwargs) -> None:
         logger.info(
@@ -94,6 +55,7 @@ class ConvertPlantUmlFile(Operation):
 class ConvertDrawIoFile(Operation):
     input_file: "DrawIoFile"
     output_file: Path
+    nats_connection: nats.NATS
 
     async def exec(self, *args, **kwargs) -> Any:
         logger.info(
@@ -126,7 +88,8 @@ class ProcessNotebookOperation(Operation):
     lang: str
     format: str
     mode: str
-    prog_lang: str = "python"
+    prog_lang: str
+    nats_connection: nats.NATS
 
     async def exec(self, *args, **kwargs) -> Any:
         logger.info(
@@ -138,7 +101,7 @@ class ProcessNotebookOperation(Operation):
 
     async def process_request(self, timeout=120):
         try:
-            nc = await connect_client_with_retry(NATS_URL)
+            nc = self.nats_connection
             logger.debug(f"Notebook: Preparing payload {self.input_file.path}")
             payload = {
                 "prog_lang": self.prog_lang,

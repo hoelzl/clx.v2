@@ -55,6 +55,26 @@ SUPPORTED_PROG_LANG_EXTENSIONS = frozenset(
     )
 )
 
+EXTENSION_TO_PROG_LANG = {
+    ".py": "python",
+    ".cpp": "cpp",
+    ".c": "c",
+    ".rust": "rust",
+    ".rs": "rust",
+    ".java": "java",
+    ".cs": "csharp",
+    ".md": "rust",
+}
+
+PROG_LANG_TO_EXTENSION = {
+    "python": ".py",
+    "cpp": ".cpp",
+    "c": ".c",
+    "rust": ".rs",
+    "java": ".java",
+    "csharp": ".cs",
+}
+
 IGNORE_PATH_REGEX = re.compile(r"(.*\.egg-info.*|.*cmake-build-.*)")
 
 
@@ -106,7 +126,7 @@ class Mode(StrEnum):
     COMPLETED = "completed"
 
 
-def ext_for(format_: str | Format) -> str:
+def ext_for(format_: str | Format, prog_lang) -> str:
     match str(format_):
         case "html":
             return ".html"
@@ -163,3 +183,15 @@ def output_specs(course: "Course", root_dir: Path) -> OutputSpec:
             mode=Mode.COMPLETED,
             root_dir=root_dir,
         )
+
+
+def path_to_prog_lang(path: Path) -> str:
+    return extension_to_prog_lang(path.suffix)
+
+
+def extension_to_prog_lang(ext: str) -> str:
+    return EXTENSION_TO_PROG_LANG[ext]
+
+
+def prog_lang_to_extension(prog_lang: str) -> str:
+    return PROG_LANG_TO_EXTENSION[prog_lang]

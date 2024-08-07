@@ -2,10 +2,12 @@ import asyncio
 import logging
 from pathlib import Path
 
+import nats
 from attrs import define, frozen, Factory
 from clx.course_spec import CourseSpec
 from clx.file import File, Notebook
 from clx.utils.execution_uils import execution_stages
+from clx.utils.nats_utils import NATS_URL, connect_client_with_retry
 from clx.utils.path_utils import is_ignored_dir_for_course, simplify_ordered_name
 from clx.utils.text_utils import Text
 
@@ -79,6 +81,7 @@ class Course:
     output_root: Path
     sections: list[Section] = Factory(list)
     _topic_map: dict[str, Path] = Factory(dict)
+    _nats_connection: nats.NATS | None = None
 
     @classmethod
     def from_spec(
@@ -86,8 +89,9 @@ class Course:
     ) -> "Course":
         if output_root is None:
             output_root = course_root / "output"
-        logger.debug(f"Creating course from spec {spec}: "
-                     f"{course_root} -> {output_root}")
+        logger.debug(
+            f"Creating course from spec {spec}: " f"{course_root} -> {output_root}"
+        )
         course = cls(spec, course_root, output_root)
         course._build_sections()
         course._add_generated_sources()
@@ -105,6 +109,11 @@ class Course:
     def notebooks(self) -> list[Notebook]:
         return [file for file in self.files if isinstance(file, Notebook)]
 
+    async def nats_connection(self):
+        if not self._nats_connection:
+            self._nats_connection = await connect_client_with_retry(NATS_URL)
+        return self._nats_connection
+
     async def process_all(self):
         logger.debug(f"Processing all files for {self.course_root}")
         for stage in execution_stages():
@@ -112,7 +121,9 @@ class Course:
             operations = []
             for file in self.files:
                 if file.execution_stage == stage:
-                    operations.append(file.get_processing_operation(self.output_root))
+                    operations.append(
+                        await file.get_processing_operation(self.output_root)
+                    )
             await asyncio.gather(
                 *[op.exec() for op in operations], return_exceptions=True
             )
