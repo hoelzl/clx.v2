@@ -12,6 +12,7 @@ services:
             - ./nats-server.conf:/etc/nats/nats-server.conf
         networks:
             - app-network
+
     notebook-processor:
         build:
             context: ./notebook-processor
@@ -28,6 +29,32 @@ services:
         environment:
             - NATS_URL=nats://nats:4222
             - LOG_LEVEL=DEBUG
+        deploy:
+            mode: replicated
+            replicas: 1
+
+    drawio-converter:
+        build:
+            context: ./drawio-converter
+        depends_on:
+            nats:
+                condition: service_started
+        environment:
+            - NATS_URL=nats://nats:4222
+            - LOG_LEVEL=DEBUG
+            - DISPLAY=:99
+        networks:
+            - app-network
+        init: true
+        develop:
+            watch:
+                -   action: sync+restart
+                    path: ./drawio-converter
+                    target: /app
+        deploy:
+            mode: replicated
+            replicas: 1
+
 networks:
     app-network:
         driver: bridge
