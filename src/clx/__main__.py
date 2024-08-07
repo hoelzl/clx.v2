@@ -7,7 +7,7 @@ from clx.course import Course
 from clx.course_spec import CourseSpec
 
 
-logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO)
 
 
 async def main(spec_file, data_dir, output_dir):
