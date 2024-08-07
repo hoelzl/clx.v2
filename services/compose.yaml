@@ -55,6 +55,26 @@ services:
             mode: replicated
             replicas: 1
 
+    plantuml-converter:
+        build:
+            context: ./plantuml-converter
+        depends_on:
+            nats:
+                condition: service_started
+        environment:
+            - NATS_URL=nats://nats:4222
+            - LOG_LEVEL=DEBUG
+        networks:
+            - app-network
+        develop:
+            watch:
+                -   action: sync+restart
+                    path: ./plantuml-converter
+                    target: /app
+        deploy:
+            mode: replicated
+            replicas: 1
+
 networks:
     app-network:
         driver: bridge
