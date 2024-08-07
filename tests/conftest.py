@@ -50,6 +50,24 @@ COURSE_XML = """
             </topics>
         </section>
     </sections>
+    <dictionaries>
+        <dictionary>
+            <name>Code</name>
+            <path>code</path>
+            <subdirs>
+                <subdir>Example_1</subdir>
+                <subdir>Example_2</subdir>
+            </subdirs>
+        </dictionary>
+        <dictionary include-top-level-files="true">
+            <name>Bonus</name>
+            <path>div/workshop</path>
+        </dictionary>
+        <dictionary>
+            <name>Bonus/Workshops</name>
+            <path>div/workshops</path>
+        </dictionary>
+    </dictionaries>
 </course>
 """
 DATA_DIR = Path(__file__).parent / "data"

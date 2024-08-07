@@ -1,13 +1,14 @@
 import asyncio
 import logging
-import os
 from pathlib import Path
-from watchdog.observers import Observer
-from watchdog.events import PatternMatchingEventHandler
 
 import click
+from watchdog.events import PatternMatchingEventHandler
+from watchdog.observers import Observer
+
 from clx.course import Course
 from clx.course_spec import CourseSpec
+from clx.utils.path_utils import is_ignored_dir_for_course
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -20,28 +21,36 @@ class FileEventHandler(PatternMatchingEventHandler):
         self.loop = loop
 
     def on_created(self, event):
-        self.loop.create_task(
-            self.handle_event(self.course.on_file_created, Path(event.src_path))
-        )
+        src_path = Path(event.src_path)
+        if not is_ignored_dir_for_course(src_path):
+            self.loop.create_task(
+                self.handle_event(self.course.on_file_created, src_path)
+            )
 
     def on_moved(self, event):
-        self.loop.create_task(
-            self.handle_event(
-                self.course.on_file_moved, Path(event.src_path), Path(event.dest_path)
+        src_path = Path(event.src_path)
+        dest_path = Path(event.dest_path)
+        if not is_ignored_dir_for_course(src_path):
+            self.loop.create_task(
+                self.handle_event(self.course.on_file_moved, src_path, dest_path)
             )
-        )
 
     def on_deleted(self, event):
-        self.loop.create_task(
-            self.handle_event(self.course.on_file_deleted, Path(event.src_path))
-        )
+        src_path = Path(event.src_path)
+        if not is_ignored_dir_for_course(src_path):
+            self.loop.create_task(
+                self.handle_event(self.course.on_file_deleted, src_path)
+            )
 
     def on_modified(self, event):
-        self.loop.create_task(
-            self.handle_event(self.course.process_file, Path(event.src_path))
-        )
+        src_path = Path(event.src_path)
+        if not is_ignored_dir_for_course(src_path):
+            self.loop.create_task(
+                self.handle_event(self.course.on_file_modified, src_path)
+            )
 
-    async def handle_event(self, method, *args):
+    @staticmethod
+    async def handle_event(method, *args):
         try:
             await method(*args)
         except Exception as e:

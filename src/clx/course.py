@@ -132,12 +132,16 @@ class Course:
                 return file
         return None
 
-    def add_file(self, path: Path):
+    def add_file(self, path: Path, warn_if_no_topic: bool = True) -> Topic | None:
         for topic in self.topics:
             if topic.matches_path(path, False):
                 topic.add_file(path)
-                return
-        logger.error(f"File not in course structure: {path}")
+                return topic
+        if warn_if_no_topic:
+            logger.warning(f"File not in course structure: {path}")
+        else:
+            logger.debug(f"File not in course structure: {path}")
+        return None
 
     @property
     def notebooks(self) -> list[Notebook]:
@@ -155,29 +159,37 @@ class Course:
 
     async def on_file_created(self, path: Path):
         logger.debug(f"On file created: {path}")
-        self.add_file(path)
-        await self.process_file(path)
+        topic = self.add_file(path, warn_if_no_topic=False)
+        if topic is not None:
+            await self.process_file(path)
+        else:
+            logger.debug(f"File not in course: {path}")
 
     async def on_file_deleted(self, file_to_delete: Path):
-        logger.debug(f"On file deleted: {file_to_delete}")
+        logger.info(f"On file deleted: {file_to_delete}")
         file = self.find_file(file_to_delete)
         if not file:
             logger.debug(f"File not / no longer in course: {file_to_delete}")
             return
         await file.delete()
 
+    async def on_file_modified(self, path: Path):
+        logger.info(f"On file modified: {path}")
+        if self.find_file(path):
+            await self.process_file(path)
+
     async def process_file(self, path: Path):
-        logging.debug(f"Processing changed file {path}")
+        logging.info(f"Processing changed file {path}")
         file = self.find_file(path)
         if not file:
-            logger.error(f"File not in course: {path}")
+            logger.error(f"Cannot process file: not in course: {path}")
             return
         op = await file.get_processing_operation(self.output_root)
         await op.exec()
         logger.debug(f"Processed file {path}")
 
     async def process_all(self):
-        logger.debug(f"Processing all files for {self.course_root}")
+        logger.info(f"Processing all files for {self.course_root}")
         for stage in execution_stages():
             logger.debug(f"Processing stage {stage}")
             operations = []
