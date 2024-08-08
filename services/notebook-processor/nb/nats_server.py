@@ -60,7 +60,7 @@ async def process_payload(payload: NotebookPayload):
         notebook_format=payload.notebook_format,
     )
     processor = NotebookProcessor(output_spec)
-    result = await processor.process_notebook(payload.notebook_text)
+    result = await processor.process_notebook(payload.notebook_text, payload.prog_lang)
     logger.debug(f"Processed notebook: {result[:100]}")
     return result
 

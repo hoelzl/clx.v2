@@ -12,6 +12,20 @@ _cpp_config = {
     "kernelspec": {"display_name": "C++17", "language": "C++17", "name": "xcpp17"},
 }
 
+_csharp_config = {
+    "file_extensions": ["cs"],
+    "jinja_prefix": "// j2",
+    "jupytext_format": "cs:percent",
+    "language_info": {
+        "file_extension": ".cs",
+        "mimetype": "text/x-csharp",
+        "name": "C#",
+        "pygments_lexer": "csharp",
+        "version": "12.0",
+    },
+    "kernelspec": {"display_name": ".NET (C#)", "language": "C#", "name": ".net-csharp"},
+}
+
 _java_config = {
     "file_extensions": ["java"],
     "jinja_prefix": "// j2",
@@ -63,17 +77,22 @@ _rust_config = {
 
 
 class Config:
-    def __init__(self, cpp, java, python, rust):
+    def __init__(self, cpp, java, python, rust, csharp):
         self.prog_lang = {
             "cpp": cpp,
             "java": java,
             "python": python,
             "rust": rust,
+            "csharp": csharp,
         }
 
 
 config = Config(
-    cpp=_cpp_config, java=_java_config, python=_python_config, rust=_rust_config
+    cpp=_cpp_config,
+    java=_java_config,
+    python=_python_config,
+    rust=_rust_config,
+    csharp=_csharp_config,
 )
 
 

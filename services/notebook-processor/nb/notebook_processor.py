@@ -79,9 +79,9 @@ class NotebookProcessor:
         self.output_spec = output_spec
         self.id_generator = CellIdGenerator()
 
-    async def process_notebook(self, notebook_text: str):
+    async def process_notebook(self, notebook_text: str, prog_lang: str):
         expanded_nb = await self.load_and_expand_jinja_template(notebook_text)
-        processed_nb = self.process_notebook_for_spec(expanded_nb)
+        processed_nb = self.process_notebook_for_spec(expanded_nb, prog_lang)
         result = await self.create_contents(processed_nb)
         logger.debug(f"Processed notebook. Result: {result[:100]}...")
         return result
@@ -115,20 +115,20 @@ class NotebookProcessor:
             "lang": output_spec.lang,
         }
 
-    def process_notebook_for_spec(self, expanded_nb: str) -> NotebookNode:
+    def process_notebook_for_spec(self, expanded_nb: str, prog_lang) -> NotebookNode:
         nb = jupytext.reads(expanded_nb)
-        processed_nb = self._process_notebook_node(nb)
+        processed_nb = self._process_notebook_node(nb, prog_lang)
         return processed_nb
 
-    def _process_notebook_node(self, nb: NotebookNode) -> NotebookNode:
+    def _process_notebook_node(self, nb: NotebookNode, prog_lang: str) -> NotebookNode:
         new_cells = [
             self._process_cell(cell, index)
             for index, cell in enumerate(nb.get("cells", []))
             if self.output_spec.is_cell_included(cell)
         ]
         nb.cells = new_cells
-        nb.metadata["language_info"] = language_info("python")
-        nb.metadata["kernelspec"] = kernelspec_for("python")
+        nb.metadata["language_info"] = language_info(prog_lang)
+        nb.metadata["kernelspec"] = kernelspec_for(prog_lang)
         _, normalized_nb = normalize(nb)
         return normalized_nb
 
