@@ -88,9 +88,10 @@ class CopyDictGroupOperation(Operation):
     lang: str
 
     async def exec(self, *args, **kwargs) -> Any:
-        logger.info(f"Copying {self.dict_group.output_path(self.lang)}")
+        logger.info(f"Copying {self.dict_group.output_path(is_speaker, self.lang)}")
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, self.dict_group.copy_to_output(self.lang))
+        await loop.run_in_executor(None, self.dict_group.copy_to_output(is_speaker,
+                                                                        self.lang))
 
 
 @frozen

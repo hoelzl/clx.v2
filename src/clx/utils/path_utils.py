@@ -126,6 +126,7 @@ class Format(StrEnum):
 class Mode(StrEnum):
     CODE_ALONG = "code-along"
     COMPLETED = "completed"
+    SPEAKER = "speaker"
 
 
 def ext_for(format_: str | Format, prog_lang) -> str:
@@ -150,10 +151,11 @@ class OutputSpec:
     output_dir: Path = field(init=False)
 
     def __attrs_post_init__(self):
-        lang = as_dir_name(self.lang, self.lang)
         format_ = as_dir_name(self.format, self.lang)
         mode = as_dir_name(self.mode, self.lang)
-        output_path = output_path_for(self.root_dir, self.lang, self.course.name)
+        output_path = output_path_for(
+            self.root_dir, self.mode == "speaker", self.lang, self.course.name
+        )
 
         object.__setattr__(
             self,
@@ -184,6 +186,16 @@ def output_specs(course: "Course", root_dir: Path) -> OutputSpec:
             mode=Mode.COMPLETED,
             root_dir=root_dir,
         )
+    for lang_dir in [Lang.DE, Lang.EN]:
+        for format_dir in [Format.HTML, Format.NOTEBOOK]:
+            for mode_dir in [Mode.SPEAKER]:
+                yield OutputSpec(
+                    course=course,
+                    lang=lang_dir,
+                    format=format_dir,
+                    mode=mode_dir,
+                    root_dir=root_dir,
+                )
 
 
 def path_to_prog_lang(path: Path) -> str:
@@ -198,13 +210,17 @@ def prog_lang_to_extension(prog_lang: str) -> str:
     return PROG_LANG_TO_EXTENSION[prog_lang]
 
 
-def output_path_for(root_dir: Path, lang: str, name: Text):
-    return root_dir / as_dir_name(lang, lang) / sanitize_file_name(name[lang])
+def output_path_for(root_dir: Path, is_speaker: bool, lang: str, name: Text):
+    toplevel_dir = "speaker" if is_speaker else "public"
+    return (
+        root_dir
+        / toplevel_dir
+        / as_dir_name(lang, lang)
+        / sanitize_file_name(name[lang])
+    )
 
 
-def is_in_dir(
-    member_path: Path, dir_path: Path, check_is_file: bool = True
-) -> bool:
+def is_in_dir(member_path: Path, dir_path: Path, check_is_file: bool = True) -> bool:
     if dir_path.resolve() == member_path.resolve():
         return True
     if dir_path.resolve() in member_path.resolve().parents:

@@ -11,9 +11,14 @@ from clx.course_spec import CourseSpec, DictGroupSpec
 from clx.course_file import CourseFile, Notebook
 from clx.utils.div_uils import File, execution_stages
 from clx.utils.nats_utils import NATS_URL, connect_client_with_retry
-from clx.utils.path_utils import (SKIP_DIRS_FOR_OUTPUT, SKIP_DIRS_PATTERNS,
-                                  is_ignored_dir_for_course, is_in_dir, output_path_for,
-                                  simplify_ordered_name, )
+from clx.utils.path_utils import (
+    SKIP_DIRS_FOR_OUTPUT,
+    SKIP_DIRS_PATTERNS,
+    is_ignored_dir_for_course,
+    is_in_dir,
+    output_path_for,
+    simplify_ordered_name,
+)
 from clx.utils.text_utils import Text
 
 if TYPE_CHECKING:
@@ -121,21 +126,24 @@ class DictGroup:
     def output_root(self) -> Path:
         return self.course.output_root
 
-    def output_path(self, lang: str) -> Path:
+    def output_path(self, is_speaker, lang: str) -> Path:
         return (
-            output_path_for(self.output_root, lang, self.course.name) / self.name[lang]
+            output_path_for(self.output_root, is_speaker, lang, self.course.name)
+            / self.name[lang]
         )
 
-    def output_dirs(self, lang: str) -> tuple[Path, ...]:
-        return tuple(self.output_path(lang) / dir_ for dir_ in self.relative_paths)
+    def output_dirs(self, is_speaker, lang: str) -> tuple[Path, ...]:
+        return tuple(
+            self.output_path(is_speaker, lang) / dir_ for dir_ in self.relative_paths
+        )
 
-    def copy_to_output(self, lang: str):
+    def copy_to_output(self, is_speaker, lang: str):
         logger.debug(f"Copying {self.name} to output for {lang}")
         for source_dir, relative_path in zip(self.source_dirs, self.relative_paths):
             if not source_dir.exists():
                 logger.error(f"Source directory does not exist: {source_dir}")
                 continue
-            output_dir = self.output_path(lang) / relative_path
+            output_dir = self.output_path(is_speaker, lang) / relative_path
             output_dir.mkdir(parents=True, exist_ok=True)
             shutil.copytree(
                 source_dir,

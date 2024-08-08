@@ -13,19 +13,23 @@ def test_is_slides_file():
 
 def test_output_spec(course):
     unit = list(output_specs(course, Path("slides_1.py")))
-    assert len(unit) == 10
+    assert len(unit) == 14
 
     # Half the outputs should be in each language.
-    assert len([os for os in unit if os.lang == Lang.DE]) == 5
-    assert len([os for os in unit if os.lang == Lang.EN]) == 5
+    assert len([os for os in unit if os.lang == Lang.DE]) == 7
+    assert len([os for os in unit if os.lang == Lang.EN]) == 7
 
-    # We generate HTML and notebook files for each language and mode.
-    # Code files are only generated for completed mode.
-    assert len([os for os in unit if os.format == Format.HTML]) == 4
-    assert len([os for os in unit if os.format == Format.NOTEBOOK]) == 4
+    # We generate HTML and notebook files for each language and mode, as well as for
+    # public and speaker versions. Code files are only generated for completed mode.
+    assert len([os for os in unit if os.format == Format.HTML]) == 6
+    assert len([os for os in unit if os.format == Format.NOTEBOOK]) == 6
     assert len([os for os in unit if os.format == Format.CODE]) == 2
+
+    # We have HTML and notebooks in 2 languages each for code-along and speaker
+    # For completed, we have additionally the code files.
     assert len([os for os in unit if os.mode == Mode.CODE_ALONG]) == 4
     assert len([os for os in unit if os.mode == Mode.COMPLETED]) == 6
+    assert len([os for os in unit if os.mode == Mode.SPEAKER]) == 4
 
     os1 = unit[0]
     assert os1.lang == Lang.DE

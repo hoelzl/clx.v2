@@ -100,7 +100,7 @@ async def test_file_from_path_data_file_operations(course, topic_1):
     ops = cast(list[CopyFileOperation], list(process_op.operations))
     op = ops[0]
     assert op.output_file == course.output_root / (
-        f"De/Mein Kurs/Folien/Html/Code-Along/Woche 1/{DATA_FILE}"
+        f"public/De/Mein Kurs/Folien/Html/Code-Along/Woche 1/{DATA_FILE}"
     )
 
     assert len(ops) == len(list(output_specs(course, course.output_root)))
@@ -136,7 +136,7 @@ async def test_file_from_path_notebook_operations(course, topic_1):
     ops = cast(list[ProcessNotebookOperation], list(process_op.operations))
     op = ops[0]
     assert op.output_file == course.output_root / (
-        "De/Mein Kurs/Folien/Html/Code-Along/Woche 1/00 Folien von Test 1.html"
+        "public/De/Mein Kurs/Folien/Html/Code-Along/Woche 1/00 Folien von Test 1.html"
     )
 
     assert len(ops) == len(list(output_specs(course, course.output_root)))
@@ -161,15 +161,35 @@ async def test_data_file_generated_outputs(course, topic_1):
     await op.exec()
 
     assert unit.generated_sources == frozenset()
+    public_de = "public/De/Mein Kurs/Folien"
+    public_en = "public/En/My Course/Slides"
+    speaker_de = "speaker/De/Mein Kurs/Folien"
+    speaker_en = "speaker/En/My Course/Slides"
+
     assert unit.generated_outputs == {
-        output_dir / f"De/Mein Kurs/Folien/Html/Code-Along/Woche 1/{DATA_FILE}",
-        output_dir / f"De/Mein Kurs/Folien/Html/Completed/Woche 1/{DATA_FILE}",
-        output_dir / f"De/Mein Kurs/Folien/Notebooks/Code-Along/Woche 1/{DATA_FILE}",
-        output_dir / f"De/Mein Kurs/Folien/Notebooks/Completed/Woche 1/{DATA_FILE}",
-        output_dir / f"De/Mein Kurs/Folien/Python/Completed/Woche 1/{DATA_FILE}",
-        output_dir / f"En/My Course/Slides/Html/Code-Along/Week 1/{DATA_FILE}",
-        output_dir / f"En/My Course/Slides/Html/Completed/Week 1/{DATA_FILE}",
-        output_dir / f"En/My Course/Slides/Notebooks/Code-Along/Week 1/{DATA_FILE}",
-        output_dir / f"En/My Course/Slides/Notebooks/Completed/Week 1/{DATA_FILE}",
-        output_dir / f"En/My Course/Slides/Python/Completed/Week 1/{DATA_FILE}",
+        output_dir / f"{public_de}/Html/Code-Along/Woche 1/{DATA_FILE}",
+        output_dir / f"{public_de}/Html/Completed/Woche 1/{DATA_FILE}",
+        output_dir / f"{public_de}/Notebooks/Code-Along/Woche 1/{DATA_FILE}",
+        output_dir / f"{public_de}/Notebooks/Completed/Woche 1/{DATA_FILE}",
+        output_dir / f"{public_de}/Python/Completed/Woche 1/{DATA_FILE}",
+        output_dir / f"{public_en}/Html/Code-Along/Week 1/{DATA_FILE}",
+        output_dir / f"{public_en}/Html/Completed/Week 1/{DATA_FILE}",
+        output_dir / f"{public_en}/Notebooks/Code-Along/Week 1/{DATA_FILE}",
+        output_dir / f"{public_en}/Notebooks/Completed/Week 1/{DATA_FILE}",
+        output_dir / f"{public_en}/Python/Completed/Week 1/{DATA_FILE}",
+        output_dir / f"{public_de}/Html/Completed/Woche 1/{DATA_FILE}",
+        output_dir / f"{public_de}/Notebooks/Completed/Woche 1/{DATA_FILE}",
+        output_dir / f"{public_de}/Python/Completed/Woche 1/{DATA_FILE}",
+        output_dir / f"{public_en}/Html/Completed/Week 1/{DATA_FILE}",
+        output_dir / f"{public_en}/Notebooks/Completed/Week 1/{DATA_FILE}",
+        output_dir / f"{public_en}/Python/Completed/Week 1/{DATA_FILE}",
+
+        output_dir / f"{speaker_de}/Html/Speaker/Woche 1/{DATA_FILE}",
+        output_dir / f"{speaker_de}/Notebooks/Speaker/Woche 1/{DATA_FILE}",
+        output_dir / f"{speaker_en}/Html/Speaker/Week 1/{DATA_FILE}",
+        output_dir / f"{speaker_en}/Notebooks/Speaker/Week 1/{DATA_FILE}",
+        output_dir / f"{speaker_de}/Html/Speaker/Woche 1/{DATA_FILE}",
+        output_dir / f"{speaker_de}/Notebooks/Speaker/Woche 1/{DATA_FILE}",
+        output_dir / f"{speaker_en}/Html/Speaker/Week 1/{DATA_FILE}",
+        output_dir / f"{speaker_en}/Notebooks/Speaker/Week 1/{DATA_FILE}",
     }

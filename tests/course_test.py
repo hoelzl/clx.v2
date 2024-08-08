@@ -84,26 +84,26 @@ def test_course_dict_groups(course_spec):
         src_path("code/solutions/Example_1"),
         src_path("code/solutions/Example_3"),
     )
-    assert group1.output_dirs("de") == (
-        out_path("De/Mein Kurs/Code/Solutions/Example_1"),
-        out_path("De/Mein Kurs/Code/Solutions/Example_3"),
+    assert group1.output_dirs(True, "de") == (
+        out_path("speaker/De/Mein Kurs/Code/Solutions/Example_1"),
+        out_path("speaker/De/Mein Kurs/Code/Solutions/Example_3"),
     )
-    assert group1.output_dirs("en") == (
-        out_path("En/My Course/Code/Solutions/Example_1"),
-        out_path("En/My Course/Code/Solutions/Example_3"),
+    assert group1.output_dirs(False, "en") == (
+        out_path("public/En/My Course/Code/Solutions/Example_1"),
+        out_path("public/En/My Course/Code/Solutions/Example_3"),
     )
 
     group2 = course.dict_groups[1]
     assert group2.name == Text(de="Bonus", en="Bonus")
     assert group2.source_dirs == (src_path("div/workshops"),)
-    assert group2.output_dirs("de") == (out_path("De/Mein Kurs/Bonus"),)
-    assert group2.output_dirs("en") == (out_path("En/My Course/Bonus"),)
+    assert group2.output_dirs(False, "de") == (out_path("public/De/Mein Kurs/Bonus"),)
+    assert group2.output_dirs(True, "en") == (out_path("speaker/En/My Course/Bonus"),)
 
     group3 = course.dict_groups[2]
     assert group3.name == Text(de="", en="")
     assert group3.source_dirs == (src_path("root-files"),)
-    assert group3.output_dirs("de") == (out_path("De/Mein Kurs"),)
-    assert group3.output_dirs("en") == (out_path("En/My Course"),)
+    assert group3.output_dirs(True, "de") == (out_path("speaker/De/Mein Kurs"),)
+    assert group3.output_dirs(False, "en") == (out_path("public/En/My Course"),)
 
 
 def test_course_files(course_spec):
@@ -211,37 +211,39 @@ def test_course_dict_croups_copy(course_spec):
         output_dir = Path(output_dir)
         course = Course.from_spec(course_spec, DATA_DIR, output_dir)
         for dict_group in course.dict_groups:
-            dict_group.copy_to_output("de")
-            dict_group.copy_to_output("en")
+            dict_group.copy_to_output(True, "de")
+            dict_group.copy_to_output(False, "en")
 
-        assert len(list(output_dir.glob("**/*"))) == 28
+        assert len(list(output_dir.glob("**/*"))) == 30
         assert set(output_dir.glob("**/*")) == {
-            output_dir / "De",
-            output_dir / "De/Mein Kurs",
-            output_dir / "De/Mein Kurs/Bonus",
-            output_dir / "De/Mein Kurs/Bonus/Workshop-1",
-            output_dir / "De/Mein Kurs/Bonus/Workshop-1/workshop-1.txt",
-            output_dir / "De/Mein Kurs/Bonus/workshops-toplevel.txt",
-            output_dir / "De/Mein Kurs/Code",
-            output_dir / "De/Mein Kurs/Code/Solutions",
-            output_dir / "De/Mein Kurs/Code/Solutions/Example_1",
-            output_dir / "De/Mein Kurs/Code/Solutions/Example_1/example-1.txt",
-            output_dir / "De/Mein Kurs/Code/Solutions/Example_3",
-            output_dir / "De/Mein Kurs/Code/Solutions/Example_3/example-3.txt",
-            output_dir / "De/Mein Kurs/root-file-1.txt",
-            output_dir / "De/Mein Kurs/root-file-2",
-            output_dir / "En",
-            output_dir / "En/My Course",
-            output_dir / "En/My Course/Bonus",
-            output_dir / "En/My Course/Bonus/Workshop-1",
-            output_dir / "En/My Course/Bonus/Workshop-1/workshop-1.txt",
-            output_dir / "En/My Course/Bonus/workshops-toplevel.txt",
-            output_dir / "En/My Course/Code",
-            output_dir / "En/My Course/Code/Solutions",
-            output_dir / "En/My Course/Code/Solutions/Example_1",
-            output_dir / "En/My Course/Code/Solutions/Example_1/example-1.txt",
-            output_dir / "En/My Course/Code/Solutions/Example_3",
-            output_dir / "En/My Course/Code/Solutions/Example_3/example-3.txt",
-            output_dir / "En/My Course/root-file-1.txt",
-            output_dir / "En/My Course/root-file-2",
+            output_dir / "speaker",
+            output_dir / "speaker/De",
+            output_dir / "speaker/De/Mein Kurs",
+            output_dir / "speaker/De/Mein Kurs/Bonus",
+            output_dir / "speaker/De/Mein Kurs/Bonus/Workshop-1",
+            output_dir / "speaker/De/Mein Kurs/Bonus/Workshop-1/workshop-1.txt",
+            output_dir / "speaker/De/Mein Kurs/Bonus/workshops-toplevel.txt",
+            output_dir / "speaker/De/Mein Kurs/Code",
+            output_dir / "speaker/De/Mein Kurs/Code/Solutions",
+            output_dir / "speaker/De/Mein Kurs/Code/Solutions/Example_1",
+            output_dir / "speaker/De/Mein Kurs/Code/Solutions/Example_1/example-1.txt",
+            output_dir / "speaker/De/Mein Kurs/Code/Solutions/Example_3",
+            output_dir / "speaker/De/Mein Kurs/Code/Solutions/Example_3/example-3.txt",
+            output_dir / "speaker/De/Mein Kurs/root-file-1.txt",
+            output_dir / "speaker/De/Mein Kurs/root-file-2",
+            output_dir / "public",
+            output_dir / "public/En",
+            output_dir / "public/En/My Course",
+            output_dir / "public/En/My Course/Bonus",
+            output_dir / "public/En/My Course/Bonus/Workshop-1",
+            output_dir / "public/En/My Course/Bonus/Workshop-1/workshop-1.txt",
+            output_dir / "public/En/My Course/Bonus/workshops-toplevel.txt",
+            output_dir / "public/En/My Course/Code",
+            output_dir / "public/En/My Course/Code/Solutions",
+            output_dir / "public/En/My Course/Code/Solutions/Example_1",
+            output_dir / "public/En/My Course/Code/Solutions/Example_1/example-1.txt",
+            output_dir / "public/En/My Course/Code/Solutions/Example_3",
+            output_dir / "public/En/My Course/Code/Solutions/Example_3/example-3.txt",
+            output_dir / "public/En/My Course/root-file-1.txt",
+            output_dir / "public/En/My Course/root-file-2",
         }
