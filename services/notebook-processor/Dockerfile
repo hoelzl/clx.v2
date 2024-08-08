@@ -19,5 +19,7 @@ RUN dotnet tool install -g --no-cache Microsoft.dotnet-interactive && \
     dotnet interactive jupyter install
 
 COPY . .
+RUN pip install -e /app/
+WORKDIR /app
 
 CMD ["python", "-m", "nb.nats_server"]

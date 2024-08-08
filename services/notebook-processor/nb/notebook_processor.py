@@ -27,7 +27,8 @@ from .utils.jupyter_utils import (
     warn_on_invalid_code_tags,
     warn_on_invalid_markdown_tags,
 )
-from .utils.prog_lang_utils import kernelspec_for, language_info
+from .utils.prog_lang_utils import jinja_prefix_for, jupytext_format_for, \
+    kernelspec_for, language_info
 
 
 def string_to_list(string: str) -> list[str]:
@@ -36,7 +37,7 @@ def string_to_list(string: str) -> list[str]:
 
 # Configuration
 JINJA_LINE_STATEMENT_PREFIX = os.environ.get("JINJA_LINE_STATEMENT_PREFIX", "# j2")
-JINJA_TEMPLATES_FOLDER = os.environ.get("JINJA_TEMPLATES_FOLDER", "templates_python")
+JINJA_TEMPLATES_PATH = os.environ.get("JINJA_TEMPLATES_PATH", "templates")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG").upper()
 LOG_CELL_PROCESSING = os.environ.get("LOG_CELL_PROCESSING", "False") == "True"
 
@@ -87,24 +88,29 @@ class NotebookProcessor:
         return result
 
     async def load_and_expand_jinja_template(self, notebook_text: str) -> str:
+        logger.debug("Loading and expanding Jinja template")
         jinja_env = self._create_jinja_environment()
         nb_template = jinja_env.from_string(
             notebook_text,
             globals=self._create_jinja_globals(self.output_spec),
         )
+        logger.debug("Jinja template created")
         expanded_nb = await nb_template.render_async()
+        logger.debug("Jinja template expanded")
         return expanded_nb
 
-    @staticmethod
-    def _create_jinja_environment():
+    def _create_jinja_environment(self):
+        templates_path = f"{JINJA_TEMPLATES_PATH}_{self.output_spec.prog_lang}"
+        logger.debug(f"Creating Jinja environment with templates from {templates_path}")
         jinja_env = Environment(
-            loader=(PackageLoader("nb", JINJA_TEMPLATES_FOLDER)),
+            loader=(PackageLoader("nb", templates_path)),
             autoescape=False,
             undefined=StrictUndefined,
-            line_statement_prefix=JINJA_LINE_STATEMENT_PREFIX,
+            line_statement_prefix=jinja_prefix_for(self.output_spec.prog_lang),
             keep_trailing_newline=True,
             enable_async=True,
         )
+        logger.debug("Jinja environment created")
         return jinja_env
 
     @staticmethod
@@ -116,7 +122,12 @@ class NotebookProcessor:
         }
 
     def process_notebook_for_spec(self, expanded_nb: str, prog_lang) -> NotebookNode:
-        nb = jupytext.reads(expanded_nb)
+        jupytext_format = jupytext_format_for(self.output_spec.prog_lang)
+        logger.debug(f"Processing notebook for in format "
+                     f"'{self.output_spec.notebook_format}' with Jupytext format "
+                     f"'{jupytext_format}'")
+        nb = jupytext.reads(expanded_nb,
+                            fmt=jupytext_format)
         processed_nb = self._process_notebook_node(nb, prog_lang)
         return processed_nb
 

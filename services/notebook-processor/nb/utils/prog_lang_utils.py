@@ -15,7 +15,9 @@ _cpp_config = {
 _csharp_config = {
     "file_extensions": ["cs"],
     "jinja_prefix": "// j2",
-    "jupytext_format": "cs:percent",
+    "jupytext_format": {
+        "format_name": "percent",
+        "extension": ".cs"},
     "language_info": {
         "file_extension": ".cs",
         "mimetype": "text/x-csharp",
@@ -99,6 +101,13 @@ config = Config(
 def suffix_for(prog_lang: str) -> str:
     try:
         return "." + config.prog_lang[prog_lang]["file_extensions"][0]
+    except KeyError:
+        raise ValueError(f"Unsupported language: {prog_lang}")
+
+
+def jinja_prefix_for(prog_lang: str) -> str:
+    try:
+        return config.prog_lang[prog_lang]["jinja_prefix"]
     except KeyError:
         raise ValueError(f"Unsupported language: {prog_lang}")
 

@@ -51,7 +51,7 @@ async def connect_client_with_retry(nats_url: str, num_retries: int = 5):
 
 
 async def process_payload(payload: NotebookPayload):
-    logger.debug(f"Processing notebook:")
+    logger.debug(f"Processing notebook")
 
     output_spec = create_output_spec(
         output_type=payload.output_type,
@@ -59,6 +59,7 @@ async def process_payload(payload: NotebookPayload):
         lang=payload.language,
         notebook_format=payload.notebook_format,
     )
+    logger.debug("Output spec created")
     processor = NotebookProcessor(output_spec)
     result = await processor.process_notebook(payload.notebook_text, payload.prog_lang)
     logger.debug(f"Processed notebook: {result[:100]}")
@@ -77,7 +78,7 @@ def try_to_process_notebook_payload(data):
 async def process_message(message: Msg) -> None:
     try:
         data = json.loads(message.data)
-        logger.debug(f"Received JSON data: {data}")
+        logger.debug(f"Received JSON data: {data}"[:100])
         result = await try_to_process_notebook_payload(data)
         logger.debug(f"Result: {result[:100]}")
         response = json.dumps({"result": str(result)})

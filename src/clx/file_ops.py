@@ -105,8 +105,8 @@ class ProcessNotebookOperation(Operation):
 
     async def exec(self, *args, **kwargs) -> Any:
         logger.info(
-            f"Processing notebook {self.input_file.relative_path} "
-            f"to {self.output_file}"
+            f"Processing notebook '{self.input_file.relative_path}' "
+            f"to '{self.output_file}'"
         )
         await self.process_request()
         self.input_file.generated_outputs.add(self.output_file)
