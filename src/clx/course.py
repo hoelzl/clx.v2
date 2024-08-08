@@ -8,16 +8,12 @@ import nats
 from attrs import Factory, define, frozen
 
 from clx.course_spec import CourseSpec, DictGroupSpec
-from clx.file import File, Notebook
-from clx.utils.execution_uils import execution_stages
+from clx.course_file import CourseFile, Notebook
+from clx.utils.div_uils import File, execution_stages
 from clx.utils.nats_utils import NATS_URL, connect_client_with_retry
-from clx.utils.path_utils import (
-    SKIP_DIRS_FOR_OUTPUT,
-    SKIP_DIRS_PATTERNS,
-    is_ignored_dir_for_course,
-    output_path_for,
-    simplify_ordered_name,
-)
+from clx.utils.path_utils import (SKIP_DIRS_FOR_OUTPUT, SKIP_DIRS_PATTERNS,
+                                  is_ignored_dir_for_course, is_in_dir, output_path_for,
+                                  simplify_ordered_name, )
 from clx.utils.text_utils import Text
 
 if TYPE_CHECKING:
@@ -31,21 +27,21 @@ class Topic:
     id: str
     section: "Section"
     path: Path
-    _file_map: dict[Path, File] = Factory(dict)
+    _file_map: dict[Path, CourseFile] = Factory(dict)
 
     @property
     def course(self) -> "Course":
         return self.section.course
 
     @property
-    def files(self) -> list[File]:
+    def files(self) -> list[CourseFile]:
         return list(self._file_map.values())
 
     @property
     def notebooks(self) -> list[Notebook]:
         return [file for file in self.files if isinstance(file, Notebook)]
 
-    def file_for_path(self, path: Path) -> File:
+    def file_for_path(self, path: Path) -> CourseFile:
         return self._file_map.get(path)
 
     def add_file(self, path: Path):
@@ -61,17 +57,13 @@ class Topic:
             logger.error(f"Trying to add a directory to topic {self.id!r}: {path}")
             return
         try:
-            self._file_map[path] = File.from_path(self.course, path, self)
+            self._file_map[path] = CourseFile.from_path(self.course, path, self)
         except Exception as e:
             logger.error(f"Error adding file {path}: {e}")
 
     def matches_path(self, path: Path, check_is_file: bool = True) -> bool:
         """Returns True if the path is within the topic directory."""
-        if self.path.resolve() in path.resolve().parents:
-            if check_is_file:
-                return path.is_file()
-            return True
-        return False
+        return is_in_dir(path, self.path, check_is_file)
 
     def build_file_map(self):
         logger.debug(f"Building file map for {self.path}")
@@ -90,7 +82,7 @@ class Section:
     topics: list[Topic] = Factory(list)
 
     @property
-    def files(self) -> list[File]:
+    def files(self) -> list[CourseFile]:
         return [file for topic in self.topics for file in topic.files]
 
     @property
@@ -200,10 +192,18 @@ class Course:
         return [topic for section in self.sections for topic in section.topics]
 
     @property
-    def files(self) -> list[File]:
+    def files(self) -> list[CourseFile]:
         return [file for section in self.sections for file in section.files]
 
-    def find_file(self, path):
+    def find_file(self, path) -> File | None:
+        abspath = path.resolve()
+        for dir_group in self.dict_groups:
+            for source_dir in dir_group.source_dirs:
+                if is_in_dir(abspath, source_dir):
+                    return File(path=abspath)
+        return self.find_course_file(abspath)
+
+    def find_course_file(self, path: Path) -> CourseFile | None:
         abspath = path.resolve()
         for file in self.files:
             if file.path.resolve() == abspath:
@@ -245,7 +245,7 @@ class Course:
 
     async def on_file_deleted(self, file_to_delete: Path):
         logger.info(f"On file deleted: {file_to_delete}")
-        file = self.find_file(file_to_delete)
+        file = self.find_course_file(file_to_delete)
         if not file:
             logger.debug(f"File not / no longer in course: {file_to_delete}")
             return
@@ -253,12 +253,12 @@ class Course:
 
     async def on_file_modified(self, path: Path):
         logger.info(f"On file modified: {path}")
-        if self.find_file(path):
+        if self.find_course_file(path):
             await self.process_file(path)
 
     async def process_file(self, path: Path):
         logging.info(f"Processing changed file {path}")
-        file = self.find_file(path)
+        file = self.find_course_file(path)
         if not file:
             logger.error(f"Cannot process file: not in course: {path}")
             return

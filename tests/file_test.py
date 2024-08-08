@@ -1,10 +1,10 @@
 from pathlib import Path
 from typing import cast
 
-from clx.file import (
+from clx.course_file import (
     DataFile,
     DrawIoFile,
-    File,
+    CourseFile,
     Notebook,
     PlantUmlFile,
 )
@@ -14,7 +14,7 @@ from clx.file_ops import (
     CopyFileOperation,
     ProcessNotebookOperation,
 )
-from clx.operation import Concurrently, NoOperation
+from clx.operation import Concurrently
 from clx.utils.path_utils import output_specs
 
 PLANT_UML_FILE = "pu/my_diag.pu"
@@ -27,7 +27,7 @@ def test_file_from_path_plant_uml(course, section_1, topic_1):
     file_path = topic_1.path / PLANT_UML_FILE
     expected_output = file_path.parents[1] / "img/my_diag.png"
 
-    unit = File.from_path(course, file_path, topic_1)
+    unit = CourseFile.from_path(course, file_path, topic_1)
 
     assert isinstance(unit, PlantUmlFile)
     assert unit.path == file_path
@@ -41,7 +41,7 @@ def test_file_from_path_plant_uml(course, section_1, topic_1):
 async def test_file_from_path_plant_uml_operations(course, topic_1):
     file_path = topic_1.path / PLANT_UML_FILE
 
-    unit = File.from_path(course, file_path, topic_1)
+    unit = CourseFile.from_path(course, file_path, topic_1)
 
     process_op = await unit.get_processing_operation(course.output_root)
     assert isinstance(process_op, ConvertPlantUmlFile)
@@ -53,7 +53,7 @@ def test_file_from_path_drawio(course, section_1, topic_1):
     file_path = topic_1.path / DRAWIO_FILE
     expected_output = file_path.parents[1] / "img/my_drawing.png"
 
-    unit = File.from_path(course, file_path, topic_1)
+    unit = CourseFile.from_path(course, file_path, topic_1)
 
     assert isinstance(unit, DrawIoFile)
     assert unit.path == file_path
@@ -67,7 +67,7 @@ def test_file_from_path_drawio(course, section_1, topic_1):
 async def test_file_from_path_drawio_operations(course, topic_1):
     file_path = topic_1.path / DRAWIO_FILE
 
-    unit = File.from_path(course, file_path, topic_1)
+    unit = CourseFile.from_path(course, file_path, topic_1)
 
     process_op = await unit.get_processing_operation(course.output_root)
     assert isinstance(process_op, ConvertDrawIoFile)
@@ -78,7 +78,7 @@ async def test_file_from_path_drawio_operations(course, topic_1):
 def test_file_from_path_data_file(course, section_1, topic_1):
     file_path = topic_1.path / DATA_FILE
 
-    unit = File.from_path(course, file_path, topic_1)
+    unit = CourseFile.from_path(course, file_path, topic_1)
 
     assert isinstance(unit, DataFile)
     assert unit.path == file_path
@@ -92,7 +92,7 @@ def test_file_from_path_data_file(course, section_1, topic_1):
 async def test_file_from_path_data_file_operations(course, topic_1):
     file_path = topic_1.path / DATA_FILE
 
-    unit = File.from_path(course, file_path, topic_1)
+    unit = CourseFile.from_path(course, file_path, topic_1)
 
     process_op = await unit.get_processing_operation(course.output_root)
     assert isinstance(process_op, Concurrently)
@@ -113,7 +113,7 @@ async def test_file_from_path_data_file_operations(course, topic_1):
 def test_file_from_path_notebook(course, section_1, topic_1):
     file_path = topic_1.path / NOTEBOOK_FILE
 
-    unit = File.from_path(course, file_path, topic_1)
+    unit = CourseFile.from_path(course, file_path, topic_1)
 
     assert isinstance(unit, Notebook)
     assert unit.path == file_path
@@ -128,7 +128,7 @@ def test_file_from_path_notebook(course, section_1, topic_1):
 async def test_file_from_path_notebook_operations(course, topic_1):
     file_path = topic_1.path / NOTEBOOK_FILE
 
-    unit = File.from_path(course, file_path, topic_1)
+    unit = CourseFile.from_path(course, file_path, topic_1)
 
     process_op = await unit.get_processing_operation(course.output_root)
     assert isinstance(process_op, Concurrently)
@@ -154,7 +154,7 @@ async def test_file_from_path_notebook_operations(course, topic_1):
 
 async def test_data_file_generated_outputs(course, topic_1):
     file_path = topic_1.path / DATA_FILE
-    unit = File.from_path(course, file_path, topic_1)
+    unit = CourseFile.from_path(course, file_path, topic_1)
 
     output_dir = course.output_root
     op = await unit.get_processing_operation(output_dir)

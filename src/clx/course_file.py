@@ -12,7 +12,7 @@ from clx.file_ops import (
     ProcessNotebookOperation,
 )
 from clx.operation import Concurrently, NoOperation, Operation
-from clx.utils.execution_uils import FIRST_EXECUTION_STAGE, LAST_EXECUTION_STAGE
+from clx.utils.div_uils import FIRST_EXECUTION_STAGE, File, LAST_EXECUTION_STAGE
 from clx.utils.notebook_utils import find_notebook_titles
 from clx.utils.path_utils import (
     PLANTUML_EXTENSIONS,
@@ -30,19 +30,18 @@ logger = logging.getLogger(__name__)
 
 
 @define
-class File:
+class CourseFile(File):
     course: "Course"
-    path: Path
     topic: "Topic"
     generated_outputs: set[Path] = field(factory=set)
 
     @staticmethod
-    def from_path(course: "Course", file: Path, topic: "Topic") -> "File":
-        cls: type[File] = _find_file_class(file)
+    def from_path(course: "Course", file: Path, topic: "Topic") -> "CourseFile":
+        cls: type[CourseFile] = _find_file_class(file)
         return cls._from_path(course, file, topic)
 
     @classmethod
-    def _from_path(cls, course: "Course", file: Path, topic: "Topic") -> "File":
+    def _from_path(cls, course: "Course", file: Path, topic: "Topic") -> "CourseFile":
         return cls(course=course, path=file, topic=topic)
 
     @property
@@ -80,7 +79,7 @@ class File:
 
 
 @define
-class PlantUmlFile(File):
+class PlantUmlFile(CourseFile):
     async def get_processing_operation(self, _target_dir: Path) -> Operation:
         return ConvertPlantUmlFile(
             input_file=self,
@@ -98,7 +97,7 @@ class PlantUmlFile(File):
 
 
 @define
-class DrawIoFile(File):
+class DrawIoFile(CourseFile):
     async def get_processing_operation(self, _target_dir: Path) -> Operation:
         return ConvertDrawIoFile(
             input_file=self,
@@ -116,7 +115,7 @@ class DrawIoFile(File):
 
 
 @define
-class DataFile(File):
+class DataFile(CourseFile):
 
     @property
     def execution_stage(self) -> int:
@@ -133,7 +132,7 @@ class DataFile(File):
 
 
 @define
-class Notebook(File):
+class Notebook(CourseFile):
     title: Text = Text(de="", en="")
     number_in_section: int = 0
 
@@ -169,7 +168,7 @@ class Notebook(File):
         return f"{self.number_in_section:02} {self.title[lang]}{ext}"
 
 
-def _find_file_class(file: Path) -> type[File]:
+def _find_file_class(file: Path) -> type[CourseFile]:
     if file.suffix in PLANTUML_EXTENSIONS:
         return PlantUmlFile
     if file.suffix == ".drawio":

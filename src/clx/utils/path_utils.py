@@ -200,3 +200,15 @@ def prog_lang_to_extension(prog_lang: str) -> str:
 
 def output_path_for(root_dir: Path, lang: str, name: Text):
     return root_dir / as_dir_name(lang, lang) / sanitize_file_name(name[lang])
+
+
+def is_in_dir(
+    member_path: Path, dir_path: Path, check_is_file: bool = True
+) -> bool:
+    if dir_path.resolve() == member_path.resolve():
+        return True
+    if dir_path.resolve() in member_path.resolve().parents:
+        if check_is_file:
+            return member_path.is_file()
+        return True
+    return False

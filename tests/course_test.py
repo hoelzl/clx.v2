@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from clx.course import Course
-from clx.file import Notebook
+from clx.course_file import Notebook
 from clx.utils.text_utils import Text
 
 

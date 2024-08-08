@@ -13,7 +13,7 @@ from clx.utils.nats_utils import process_image_request
 
 if TYPE_CHECKING:
     from clx.course import DictGroup
-    from clx.file import DataFile, DrawIoFile, File, Notebook, PlantUmlFile
+    from clx.course_file import DataFile, DrawIoFile, CourseFile, Notebook, PlantUmlFile
 
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ OP_DURATION = 0.01
 
 @frozen
 class DeleteFileOperation(Operation):
-    file: "File"
+    file: "CourseFile"
     file_to_delete: Path
 
     async def exec(self, *args, **kwargs) -> None:
