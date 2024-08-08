@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from attrs import frozen, field
 
-from clx.utils.text_utils import as_dir_name, sanitize_file_name
+from clx.utils.text_utils import Text, as_dir_name, sanitize_file_name
 
 if TYPE_CHECKING:
     from clx.course import Course
@@ -151,13 +151,12 @@ class OutputSpec:
         lang = as_dir_name(self.lang, self.lang)
         format_ = as_dir_name(self.format, self.lang)
         mode = as_dir_name(self.mode, self.lang)
+        output_path = output_path_for(self.root_dir, self.lang, self.course.name)
+
         object.__setattr__(
             self,
             "output_dir",
-            self.root_dir
-            / f"{lang}"
-            / sanitize_file_name(self.course.name[self.lang])
-            / f"{format_}/{mode}",
+            output_path / f"{format_}/{mode}",
         )
 
     def __iter__(self):
@@ -195,3 +194,7 @@ def extension_to_prog_lang(ext: str) -> str:
 
 def prog_lang_to_extension(prog_lang: str) -> str:
     return PROG_LANG_TO_EXTENSION[prog_lang]
+
+
+def output_path_for(root_dir: Path, lang: str, name: Text):
+    return root_dir / as_dir_name(lang, lang) / sanitize_file_name(name[lang])

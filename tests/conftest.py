@@ -50,24 +50,25 @@ COURSE_XML = """
             </topics>
         </section>
     </sections>
-    <dictionaries>
-        <dictionary>
-            <name>Code</name>
-            <path>code</path>
+    <dict-groups>
+        <dict-group>
+            <name>Code/Solutions</name>
+            <path>code/solutions</path>
             <subdirs>
                 <subdir>Example_1</subdir>
-                <subdir>Example_2</subdir>
+                <subdir>Example_3</subdir>
             </subdirs>
-        </dictionary>
-        <dictionary include-top-level-files="true">
+        </dict-group>
+        <dict-group include-top-level-files="false">
             <name>Bonus</name>
-            <path>div/workshop</path>
-        </dictionary>
-        <dictionary>
-            <name>Bonus/Workshops</name>
             <path>div/workshops</path>
-        </dictionary>
-    </dictionaries>
+        </dict-group>
+        <!-- We can have an empty name to copy files into the course root -->
+        <dict-group include-top-level-files="true">
+            <name></name>
+            <path>root-files</path>
+        </dict-group>
+    </dict-groups>
 </course>
 """
 DATA_DIR = Path(__file__).parent / "data"
@@ -89,7 +90,10 @@ def course_spec():
 @pytest.fixture
 def course(course_spec):
     from clx.course import Course
-    return Course(course_spec, DATA_DIR, Path("/output"))
+    course = Course(course_spec, DATA_DIR, Path("/output"))
+    # Fake NATS connection, so that we can get processing operations in tests
+    course._nats_connection = "Fake NATS connection"
+    return course
 
 
 @pytest.fixture

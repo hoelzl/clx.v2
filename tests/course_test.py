@@ -27,7 +27,7 @@ def test_build_topic_map(course_spec):
     assert id3.name == "topic_100_a_topic_from_test_2"
 
 
-def test_course_from_spec(course_spec):
+def test_course_from_spec_sections(course_spec):
     course = Course.from_spec(course_spec, DATA_DIR, OUTPUT_DIR)
     assert len(course.sections) == 2
 
@@ -64,6 +64,48 @@ def test_course_from_spec(course_spec):
     assert topic_21.id == "another_topic_from_test_1"
     assert topic_21.section == section_2
     assert topic_21.path.name == "topic_110_another_topic_from_test_1"
+
+
+def test_course_dict_groups(course_spec):
+    def src_path(dir_: str):
+        return DATA_DIR / dir_
+
+    def out_path(dir_: str):
+        return OUTPUT_DIR / dir_
+
+    course = Course.from_spec(course_spec, DATA_DIR, OUTPUT_DIR)
+
+    assert len(course.dict_groups) == 3
+
+    group1 = course.dict_groups[0]
+    assert group1.name == Text(de="Code/Solutions", en="Code/Solutions")
+    assert group1.source_dirs == (
+        src_path("code/solutions/Example_1"),
+        src_path("code/solutions/Example_3"),
+    )
+    assert group1.output_dirs("de") == (
+        out_path("De/Mein Kurs/Code/Solutions/Example_1"),
+        out_path("De/Mein Kurs/Code/Solutions/Example_3"),
+    )
+    assert group1.output_dirs("en") == (
+        out_path("En/My Course/Code/Solutions/Example_1"),
+        out_path("En/My Course/Code/Solutions/Example_3"),
+    )
+    assert group1.include_top_level_files
+
+    group2 = course.dict_groups[1]
+    assert group2.name == Text(de="Bonus", en="Bonus")
+    assert group2.source_dirs == (src_path("div/workshops"),)
+    assert group2.output_dirs("de") == (out_path("De/Mein Kurs/Bonus"),)
+    assert group2.output_dirs("en") == (out_path("En/My Course/Bonus"),)
+    assert not group2.include_top_level_files
+
+    group3 = course.dict_groups[2]
+    assert group3.name == Text(de="", en="")
+    assert group3.source_dirs == (src_path("root-files"),)
+    assert group3.output_dirs("de") == (out_path("De/Mein Kurs"),)
+    assert group3.output_dirs("en") == (out_path("En/My Course"),)
+    assert group3.include_top_level_files
 
 
 def test_course_files(course_spec):
@@ -129,9 +171,7 @@ def test_topic_matches_path(topic_1):
     )
 
     # Files in the parent module do not match
-    assert not topic_1.matches_path(
-        topic_1.path.parent / "slides_in_parent.py", False
-    )
+    assert not topic_1.matches_path(topic_1.path.parent / "slides_in_parent.py", False)
 
 
 def test_add_file_to_course(course_spec):

@@ -13,6 +13,10 @@ class Text:
     def __getitem__(self, item):
         return getattr(self, item)
 
+    @classmethod
+    def from_string(cls, text):
+        return cls(de=text, en=text)
+
 
 TEXT_MAPPINGS = {
     "de": Text(de="De", en="De"),

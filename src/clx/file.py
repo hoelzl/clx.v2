@@ -78,6 +78,7 @@ class File:
         self.generated_outputs.clear()
         await asyncio.gather(*course_actions, return_exceptions=True)
 
+
 @define
 class PlantUmlFile(File):
     async def get_processing_operation(self, _target_dir: Path) -> Operation:

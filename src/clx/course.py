@@ -4,12 +4,16 @@ from pathlib import Path
 
 import nats
 from attrs import define, frozen, Factory
-from clx.course_spec import CourseSpec
+from clx.course_spec import CourseSpec, DictGroupSpec
 from clx.file import File, Notebook
 from clx.utils.execution_uils import execution_stages
 from clx.utils.nats_utils import NATS_URL, connect_client_with_retry
-from clx.utils.path_utils import is_ignored_dir_for_course, simplify_ordered_name
-from clx.utils.text_utils import Text
+from clx.utils.path_utils import (
+    is_ignored_dir_for_course,
+    output_path_for,
+    simplify_ordered_name,
+)
+from clx.utils.text_utils import Text, sanitize_file_name
 
 logger = logging.getLogger(__name__)
 
@@ -90,12 +94,62 @@ class Section:
             nb.number_in_section = index
 
 
+@frozen
+class DictGroup:
+    name: Text
+    source_dirs: tuple[Path, ...]
+    relative_paths: tuple[Path, ...]
+    course: "Course"
+    include_top_level_files: bool = True
+
+    @classmethod
+    def from_spec(cls, spec: DictGroupSpec, course: "Course") -> "DictGroup":
+        source_path = course.course_root / spec.path
+        source_dirs = (
+            tuple(source_path / subdir for subdir in spec.subdirs)
+            if spec.subdirs
+            else (source_path,)
+        )
+        relative_paths = tuple(Path(path) for path in spec.subdirs or [""])
+        return cls(
+            name=spec.name,
+            source_dirs=source_dirs,
+            relative_paths=relative_paths,
+            course=course,
+            include_top_level_files=spec.include_top_level_files,
+        )
+
+    @property
+    def output_root(self) -> Path:
+        return self.course.output_root
+
+    def output_path(self, lang: str) -> Path:
+        return (
+            output_path_for(self.output_root, lang, self.course.name) / self.name[lang]
+        )
+
+    def output_dirs(self, lang: str) -> tuple[Path, ...]:
+        return tuple(self.output_path(lang) / dir_ for dir_ in self.relative_paths)
+
+    def copy_to_output(self, lang: str):
+        for source_dir, relative_path in zip(self.source_dirs, self.relative_paths):
+            output_dir = self.output_path(lang) / relative_path
+            output_dir.mkdir(parents=True, exist_ok=True)
+            for file in source_dir.glob("**/*"):
+                if file.is_file():
+                    target = output_dir / file.relative_to(source_dir)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(file.read_bytes())
+                    logger.debug(f"Copied {file} to {target}")
+
+
 @define
 class Course:
     spec: CourseSpec
     course_root: Path
     output_root: Path
     sections: list[Section] = Factory(list)
+    dict_groups: list[DictGroup] = Factory(list)
     _topic_map: dict[str, Path] = Factory(dict)
     _nats_connection: nats.NATS | None = None
 
@@ -110,6 +164,7 @@ class Course:
         )
         course = cls(spec, course_root, output_root)
         course._build_sections()
+        course._build_dict_groups()
         course._add_generated_sources()
         return course
 
@@ -235,6 +290,10 @@ class Course:
                     continue
                 self._topic_map[topic_id] = topic
         logger.debug(f"Built topic map with {len(self._topic_map)} topics")
+
+    def _build_dict_groups(self):
+        for dictionary_spec in self.spec.dictionaries:
+            self.dict_groups.append(DictGroup.from_spec(dictionary_spec, self))
 
     def _add_generated_sources(self):
         logger.debug("Adding generated sources.")

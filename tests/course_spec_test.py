@@ -26,6 +26,26 @@ def test_parse_sections(course_xml):
     assert sections[1].topics == [TopicSpec("another_topic_from_test_1")]
 
 
+def test_parse_dictionaries(course_xml):
+    dict_groups = CourseSpec.parse_dict_groups(course_xml)
+    assert len(dict_groups) == 3
+
+    assert dict_groups[0].name == Text(de='Code/Solutions', en='Code/Solutions')
+    assert dict_groups[0].path == "code/solutions"
+    assert dict_groups[0].subdirs == ["Example_1", "Example_3"]
+    assert dict_groups[0].include_top_level_files
+
+    assert dict_groups[1].name == Text(de="Bonus", en="Bonus")
+    assert dict_groups[1].path == "div/workshops"
+    assert dict_groups[1].subdirs == []
+    assert not dict_groups[1].include_top_level_files
+
+    assert dict_groups[2].name == Text(de="", en="")
+    assert dict_groups[2].path == "root-files"
+    assert dict_groups[2].subdirs == []
+    assert dict_groups[2].include_top_level_files
+
+
 def test_from_file():
     xml_stream = io.StringIO(COURSE_XML)
     course = CourseSpec.from_file(xml_stream)
@@ -45,3 +65,7 @@ def test_from_file():
         de="https://github.com/hoelzl/my-course-de",
         en="https://github.com/hoelzl/my-course-en",
     )
+    assert len(course.dictionaries) == 3
+    assert course.dictionaries[0].name == Text(de='Code/Solutions', en='Code/Solutions')
+    assert course.dictionaries[1].name == Text(de="Bonus", en="Bonus")
+    assert course.dictionaries[2].name == Text(de="", en="")
