@@ -1,19 +1,27 @@
 import asyncio
 import logging
+import shutil
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import nats
-from attrs import define, frozen, Factory
+from attrs import Factory, define, frozen
+
 from clx.course_spec import CourseSpec, DictGroupSpec
 from clx.file import File, Notebook
 from clx.utils.execution_uils import execution_stages
 from clx.utils.nats_utils import NATS_URL, connect_client_with_retry
 from clx.utils.path_utils import (
+    SKIP_DIRS_FOR_OUTPUT,
+    SKIP_DIRS_PATTERNS,
     is_ignored_dir_for_course,
     output_path_for,
     simplify_ordered_name,
 )
-from clx.utils.text_utils import Text, sanitize_file_name
+from clx.utils.text_utils import Text
+
+if TYPE_CHECKING:
+    from clx.operation import Operation
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +108,6 @@ class DictGroup:
     source_dirs: tuple[Path, ...]
     relative_paths: tuple[Path, ...]
     course: "Course"
-    include_top_level_files: bool = True
 
     @classmethod
     def from_spec(cls, spec: DictGroupSpec, course: "Course") -> "DictGroup":
@@ -116,7 +123,6 @@ class DictGroup:
             source_dirs=source_dirs,
             relative_paths=relative_paths,
             course=course,
-            include_top_level_files=spec.include_top_level_files,
         )
 
     @property
@@ -132,15 +138,32 @@ class DictGroup:
         return tuple(self.output_path(lang) / dir_ for dir_ in self.relative_paths)
 
     def copy_to_output(self, lang: str):
+        logger.debug(f"Copying {self.name} to output for {lang}")
         for source_dir, relative_path in zip(self.source_dirs, self.relative_paths):
+            if not source_dir.exists():
+                logger.error(f"Source directory does not exist: {source_dir}")
+                continue
             output_dir = self.output_path(lang) / relative_path
             output_dir.mkdir(parents=True, exist_ok=True)
-            for file in source_dir.glob("**/*"):
-                if file.is_file():
-                    target = output_dir / file.relative_to(source_dir)
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_bytes(file.read_bytes())
-                    logger.debug(f"Copied {file} to {target}")
+            shutil.copytree(
+                source_dir,
+                output_dir,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns(
+                    *SKIP_DIRS_FOR_OUTPUT, *SKIP_DIRS_PATTERNS
+                ),
+            )
+
+    def get_processing_operation(self) -> "Operation":
+        from clx.operation import Concurrently
+        from clx.file_ops import CopyDictGroupOperation
+
+        return Concurrently(
+            (
+                CopyDictGroupOperation(dict_group=self, lang="de"),
+                CopyDictGroupOperation(dict_group=self, lang="en"),
+            )
+        )
 
 
 @define
@@ -253,6 +276,8 @@ class Course:
                     operations.append(
                         await file.get_processing_operation(self.output_root)
                     )
+            for dict_group in self.dict_groups:
+                operations.append(dict_group.get_processing_operation())
             await asyncio.gather(
                 *[op.exec() for op in operations], return_exceptions=True
             )

@@ -21,7 +21,7 @@ from clx.utils.path_utils import (
     is_slides_file,
     output_specs,
 )
-from clx.utils.text_utils import Text
+from clx.utils.text_utils import Text, as_dir_name
 
 if TYPE_CHECKING:
     from clx.course import Course, Section, Topic

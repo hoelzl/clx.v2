@@ -26,24 +26,17 @@ class DictGroupSpec:
     name: Text
     path: str
     subdirs: list[str] | None = None
-    include_top_level_files: bool = True
 
     @classmethod
     def from_element(cls, element: ETree.Element):
         subdirs = [
             subdir_element.text for subdir_element in element.find("subdirs") or []
         ]
-        include_top_level_files = element.get("include-top-level-files")
-        if include_top_level_files is not None:
-            include_top_level_files = include_top_level_files.lower() == "true"
-        else:
-            include_top_level_files = True
         name = Text.from_string(element.find("name").text or "")
         return cls(
             name=name,
             path=element.find("path").text,
             subdirs=subdirs,
-            include_top_level_files=include_top_level_files,
         )
 
 

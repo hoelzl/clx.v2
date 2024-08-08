@@ -33,17 +33,14 @@ def test_parse_dictionaries(course_xml):
     assert dict_groups[0].name == Text(de='Code/Solutions', en='Code/Solutions')
     assert dict_groups[0].path == "code/solutions"
     assert dict_groups[0].subdirs == ["Example_1", "Example_3"]
-    assert dict_groups[0].include_top_level_files
 
     assert dict_groups[1].name == Text(de="Bonus", en="Bonus")
     assert dict_groups[1].path == "div/workshops"
     assert dict_groups[1].subdirs == []
-    assert not dict_groups[1].include_top_level_files
 
     assert dict_groups[2].name == Text(de="", en="")
     assert dict_groups[2].path == "root-files"
     assert dict_groups[2].subdirs == []
-    assert dict_groups[2].include_top_level_files
 
 
 def test_from_file():

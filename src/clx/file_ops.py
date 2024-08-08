@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import shutil
@@ -11,6 +12,7 @@ from clx.operation import Operation
 from clx.utils.nats_utils import process_image_request
 
 if TYPE_CHECKING:
+    from clx.course import DictGroup
     from clx.file import DataFile, DrawIoFile, File, Notebook, PlantUmlFile
 
 
@@ -78,6 +80,17 @@ class CopyFileOperation(Operation):
         self.output_file.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(self.input_file.path, self.output_file)
         self.input_file.generated_outputs.add(self.output_file)
+
+
+@frozen
+class CopyDictGroupOperation(Operation):
+    dict_group: "DictGroup"
+    lang: str
+
+    async def exec(self, *args, **kwargs) -> Any:
+        logger.info(f"Copying {self.dict_group.output_path(self.lang)}")
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self.dict_group.copy_to_output(self.lang))
 
 
 @frozen

@@ -40,6 +40,8 @@ SKIP_DIRS_FOR_COURSE = frozenset(
 
 SKIP_DIRS_FOR_OUTPUT = SKIP_DIRS_FOR_COURSE | frozenset({"pu", "drawio"})
 
+SKIP_DIRS_PATTERNS = ["*.egg-info*", "*cmake-build*"]
+
 PLANTUML_EXTENSIONS = frozenset({".pu", ".puml", ".plantuml"})
 
 SUPPORTED_PROG_LANG_EXTENSIONS = frozenset(
@@ -156,7 +158,7 @@ class OutputSpec:
         object.__setattr__(
             self,
             "output_dir",
-            output_path / f"{format_}/{mode}",
+            output_path / f"{as_dir_name('slides', self.lang)}/{format_}/{mode}",
         )
 
     def __iter__(self):

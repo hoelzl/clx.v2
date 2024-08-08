@@ -1,16 +1,3 @@
-import io
-from pathlib import Path
-from typing import TYPE_CHECKING
-from xml.etree import ElementTree as ETree
-
-import pytest
-
-from clx.utils.text_utils import Text
-
-if TYPE_CHECKING:
-    from clx.course import Course, Section, Topic
-
-COURSE_XML = """
 <course>
     <github>
         <de>https://github.com/hoelzl/my-course-de</de>
@@ -65,45 +52,8 @@ COURSE_XML = """
         </dict-group>
         <!-- We can have an empty name to copy files into the course root -->
         <dict-group>
-            <name></name>
+            <name/>
             <path>root-files</path>
         </dict-group>
     </dict-groups>
 </course>
-"""
-DATA_DIR = Path(__file__).parent / "data"
-
-
-@pytest.fixture
-def course_xml():
-    return ETree.fromstring(COURSE_XML)
-
-
-@pytest.fixture
-def course_spec():
-    from clx.course_spec import CourseSpec
-    xml_stream = io.StringIO(COURSE_XML)
-
-    return CourseSpec.from_file(xml_stream)
-
-
-@pytest.fixture
-def course(course_spec):
-    from clx.course import Course
-    course = Course(course_spec, DATA_DIR, Path("/output"))
-    # Fake NATS connection, so that we can get processing operations in tests
-    course._nats_connection = "Fake NATS connection"
-    return course
-
-
-@pytest.fixture
-def section_1(course):
-    from clx.course import Section
-    return Section(name=Text(en="Week 1", de="Woche 1"), course=course)
-
-
-@pytest.fixture
-def topic_1(section_1):
-    from clx.course import Topic
-    path = DATA_DIR / "slides/module_000_test_1/topic_100_some_topic_from_test_1"
-    return Topic(id="some_topic", section=section_1, path=path)

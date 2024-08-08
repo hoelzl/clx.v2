@@ -1,4 +1,5 @@
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from clx.course import Course
 from clx.file import Notebook
@@ -91,21 +92,18 @@ def test_course_dict_groups(course_spec):
         out_path("En/My Course/Code/Solutions/Example_1"),
         out_path("En/My Course/Code/Solutions/Example_3"),
     )
-    assert group1.include_top_level_files
 
     group2 = course.dict_groups[1]
     assert group2.name == Text(de="Bonus", en="Bonus")
     assert group2.source_dirs == (src_path("div/workshops"),)
     assert group2.output_dirs("de") == (out_path("De/Mein Kurs/Bonus"),)
     assert group2.output_dirs("en") == (out_path("En/My Course/Bonus"),)
-    assert not group2.include_top_level_files
 
     group3 = course.dict_groups[2]
     assert group3.name == Text(de="", en="")
     assert group3.source_dirs == (src_path("root-files"),)
     assert group3.output_dirs("de") == (out_path("De/Mein Kurs"),)
     assert group3.output_dirs("en") == (out_path("En/My Course"),)
-    assert group3.include_top_level_files
 
 
 def test_course_files(course_spec):
@@ -206,3 +204,44 @@ def test_add_file_to_course(course_spec):
     unit.add_file(file_4)
     assert len(unit.files) == 11
     assert unit.find_file(file_4) is None
+
+
+def test_course_dict_croups_copy(course_spec):
+    with TemporaryDirectory() as output_dir:
+        output_dir = Path(output_dir)
+        course = Course.from_spec(course_spec, DATA_DIR, output_dir)
+        for dict_group in course.dict_groups:
+            dict_group.copy_to_output("de")
+            dict_group.copy_to_output("en")
+
+        assert len(list(output_dir.glob("**/*"))) == 28
+        assert set(output_dir.glob("**/*")) == {
+            output_dir / "De",
+            output_dir / "De/Mein Kurs",
+            output_dir / "De/Mein Kurs/Bonus",
+            output_dir / "De/Mein Kurs/Bonus/Workshop-1",
+            output_dir / "De/Mein Kurs/Bonus/Workshop-1/workshop-1.txt",
+            output_dir / "De/Mein Kurs/Bonus/workshops-toplevel.txt",
+            output_dir / "De/Mein Kurs/Code",
+            output_dir / "De/Mein Kurs/Code/Solutions",
+            output_dir / "De/Mein Kurs/Code/Solutions/Example_1",
+            output_dir / "De/Mein Kurs/Code/Solutions/Example_1/example-1.txt",
+            output_dir / "De/Mein Kurs/Code/Solutions/Example_3",
+            output_dir / "De/Mein Kurs/Code/Solutions/Example_3/example-3.txt",
+            output_dir / "De/Mein Kurs/root-file-1.txt",
+            output_dir / "De/Mein Kurs/root-file-2",
+            output_dir / "En",
+            output_dir / "En/My Course",
+            output_dir / "En/My Course/Bonus",
+            output_dir / "En/My Course/Bonus/Workshop-1",
+            output_dir / "En/My Course/Bonus/Workshop-1/workshop-1.txt",
+            output_dir / "En/My Course/Bonus/workshops-toplevel.txt",
+            output_dir / "En/My Course/Code",
+            output_dir / "En/My Course/Code/Solutions",
+            output_dir / "En/My Course/Code/Solutions/Example_1",
+            output_dir / "En/My Course/Code/Solutions/Example_1/example-1.txt",
+            output_dir / "En/My Course/Code/Solutions/Example_3",
+            output_dir / "En/My Course/Code/Solutions/Example_3/example-3.txt",
+            output_dir / "En/My Course/root-file-1.txt",
+            output_dir / "En/My Course/root-file-2",
+        }

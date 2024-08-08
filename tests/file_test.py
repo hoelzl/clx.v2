@@ -100,7 +100,7 @@ async def test_file_from_path_data_file_operations(course, topic_1):
     ops = cast(list[CopyFileOperation], list(process_op.operations))
     op = ops[0]
     assert op.output_file == course.output_root / (
-        f"De/Mein Kurs/Html/Code-Along/Woche 1/{DATA_FILE}"
+        f"De/Mein Kurs/Folien/Html/Code-Along/Woche 1/{DATA_FILE}"
     )
 
     assert len(ops) == len(list(output_specs(course, course.output_root)))
@@ -136,7 +136,7 @@ async def test_file_from_path_notebook_operations(course, topic_1):
     ops = cast(list[ProcessNotebookOperation], list(process_op.operations))
     op = ops[0]
     assert op.output_file == course.output_root / (
-        "De/Mein Kurs/Html/Code-Along/Woche 1/00 Folien von " "Test 1.html"
+        "De/Mein Kurs/Folien/Html/Code-Along/Woche 1/00 Folien von Test 1.html"
     )
 
     assert len(ops) == len(list(output_specs(course, course.output_root)))
@@ -162,14 +162,14 @@ async def test_data_file_generated_outputs(course, topic_1):
 
     assert unit.generated_sources == frozenset()
     assert unit.generated_outputs == {
-        output_dir / f"De/Mein Kurs/Html/Code-Along/Woche 1/{DATA_FILE}",
-        output_dir / f"De/Mein Kurs/Html/Completed/Woche 1/{DATA_FILE}",
-        output_dir / f"De/Mein Kurs/Notebooks/Code-Along/Woche 1/{DATA_FILE}",
-        output_dir / f"De/Mein Kurs/Notebooks/Completed/Woche 1/{DATA_FILE}",
-        output_dir / f"De/Mein Kurs/Python/Completed/Woche 1/{DATA_FILE}",
-        output_dir / f"En/My Course/Html/Code-Along/Week 1/{DATA_FILE}",
-        output_dir / f"En/My Course/Html/Completed/Week 1/{DATA_FILE}",
-        output_dir / f"En/My Course/Notebooks/Code-Along/Week 1/{DATA_FILE}",
-        output_dir / f"En/My Course/Notebooks/Completed/Week 1/{DATA_FILE}",
-        output_dir / f"En/My Course/Python/Completed/Week 1/{DATA_FILE}",
+        output_dir / f"De/Mein Kurs/Folien/Html/Code-Along/Woche 1/{DATA_FILE}",
+        output_dir / f"De/Mein Kurs/Folien/Html/Completed/Woche 1/{DATA_FILE}",
+        output_dir / f"De/Mein Kurs/Folien/Notebooks/Code-Along/Woche 1/{DATA_FILE}",
+        output_dir / f"De/Mein Kurs/Folien/Notebooks/Completed/Woche 1/{DATA_FILE}",
+        output_dir / f"De/Mein Kurs/Folien/Python/Completed/Woche 1/{DATA_FILE}",
+        output_dir / f"En/My Course/Slides/Html/Code-Along/Week 1/{DATA_FILE}",
+        output_dir / f"En/My Course/Slides/Html/Completed/Week 1/{DATA_FILE}",
+        output_dir / f"En/My Course/Slides/Notebooks/Code-Along/Week 1/{DATA_FILE}",
+        output_dir / f"En/My Course/Slides/Notebooks/Completed/Week 1/{DATA_FILE}",
+        output_dir / f"En/My Course/Slides/Python/Completed/Week 1/{DATA_FILE}",
     }
