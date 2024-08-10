@@ -60,17 +60,20 @@ class FileEventHandler(PatternMatchingEventHandler):
 async def main(spec_file, data_dir, output_dir, watch):
     if data_dir is None:
         data_dir = spec_file.parents[1]
-        logging.debug(f"Data directory set to {data_dir}")
+        logger.debug(f"Data directory set to {data_dir}")
         assert data_dir.exists(), f"Data directory {data_dir} does not exist."
     if output_dir is None:
         output_dir = data_dir / "output"
         output_dir.mkdir(exist_ok=True)
-        logging.debug(f"Output directory set to {output_dir}")
+        logger.debug(f"Output directory set to {output_dir}")
+    logger.info(f"Processing course from {spec_file.name} "
+                f"in {data_dir} to {output_dir}")
     spec = CourseSpec.from_file(spec_file)
     course = Course.from_spec(spec, data_dir, output_dir)
     await course.process_all()
 
     if watch:
+        logger.info("Watching for file changes")
         loop = asyncio.get_event_loop()
         event_handler = FileEventHandler(course, data_dir, loop, patterns=["*"])
         observer = Observer()
@@ -113,5 +116,4 @@ def run_main(spec_file, data_dir, output_dir, watch):
 
 if __name__ == "__main__":
     logging.getLogger().setLevel(logging.INFO)
-    logger.setLevel(logging.DEBUG)
     run_main()
