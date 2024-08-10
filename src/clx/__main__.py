@@ -10,7 +10,7 @@ from clx.course import Course
 from clx.course_spec import CourseSpec
 from clx.utils.path_utils import is_ignored_dir_for_course
 
-logging.getLogger().setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class FileEventHandler(PatternMatchingEventHandler):
@@ -83,6 +83,8 @@ async def main(spec_file, data_dir, output_dir, watch):
             observer.stop()
         observer.join()
 
+    course.nats_connection().close()
+
 
 @click.command()
 @click.argument(
@@ -110,4 +112,6 @@ def run_main(spec_file, data_dir, output_dir, watch):
 
 
 if __name__ == "__main__":
+    logging.getLogger().setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     run_main()

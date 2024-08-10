@@ -45,7 +45,7 @@ async def connect_client_with_retry(nats_url: str, num_retries: int = 5):
             logger.info(f"Connected to NATS at {nats_url}")
             return nc
         except Exception as e:
-            logger.error(f"Error connecting to NATS: {e}")
+            logger.exception("Error connecting to NATS: %s", e)
             await asyncio.sleep(2**i)
     raise OSError("Could not connect to NATS")
 
@@ -71,7 +71,7 @@ def try_to_process_notebook_payload(data):
         payload = NotebookPayload(**data)
         return process_payload(payload)
     except Exception as e:
-        logger.error(f"Error processing notebook: {str(e)}")
+        logger.exception("Error processing notebook: %s", e)
         raise
 
 
@@ -84,7 +84,7 @@ async def process_message(message: Msg) -> None:
         response = json.dumps({"result": str(result)})
         await message.respond(response.encode("utf-8"))
     except json.decoder.JSONDecodeError as e:
-        logger.error("JSON decode error: {e}")
+        logger.exception("JSON decode error: %s", e)
     except Exception as e:
         response = json.dumps({"error": str(e)})
         await message.respond(response.encode("utf-8"))
@@ -98,7 +98,7 @@ async def main():
             try:
                 await process_message(message)
             except Exception as e:
-                logger.error(f"Error: {e}")
+                logger.exception("Error while processing message: %s", e)
     finally:
         await client.close()
 

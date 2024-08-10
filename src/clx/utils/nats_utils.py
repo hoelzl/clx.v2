@@ -19,7 +19,7 @@ async def connect_client_with_retry(nats_url: str, num_retries: int = 5):
             logger.info(f"Connected to NATS at {nats_url}")
             return nc
         except Exception as e:
-            logger.error(f"Error connecting to NATS: {e}")
+            logger.exception("Error connecting to NATS: %s", e)
             await asyncio.sleep(0.25 * 2**i)
     raise OSError("Could not connect to NATS")
 
@@ -45,4 +45,4 @@ async def process_image_request(file, service: str, nats_topic: str, timeout=120
                 logger.debug(f"{service}: Writing PNG data to {file.output_file}")
                 file.output_file.write_bytes(png)
     except Exception as e:
-        logger.error(f"{service}: Error {e}")
+        logger.exception("%s: Error %s", service, e)

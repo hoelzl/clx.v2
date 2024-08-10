@@ -34,6 +34,10 @@ class Topic:
     path: Path
     _file_map: dict[Path, CourseFile] = Factory(dict)
 
+    @classmethod
+    def from_dir(cls, id, section, path):  # noqa
+        return cls(id=id, section=section, path=path)
+
     @property
     def course(self) -> "Course":
         return self.section.course
@@ -59,12 +63,12 @@ class Topic:
             logger.debug(f"Duplicate path when adding file: {path}")
             return
         if path.is_dir():
-            logger.error(f"Trying to add a directory to topic {self.id!r}: {path}")
+            logger.warning(f"Trying to add a directory to topic {self.id!r}: {path}")
             return
         try:
             self._file_map[path] = CourseFile.from_path(self.course, path, self)
         except Exception as e:
-            logger.error(f"Error adding file {path}: {e}")
+            logger.exception("Error adding file %s: %s", path.name, e)
 
     def matches_path(self, path: Path, check_is_file: bool = True) -> bool:
         """Returns True if the path is within the topic directory."""
@@ -268,7 +272,7 @@ class Course:
         logging.info(f"Processing changed file {path}")
         file = self.find_course_file(path)
         if not file:
-            logger.error(f"Cannot process file: not in course: {path}")
+            logger.warning(f"Cannot process file: not in course: {path}")
             return
         op = await file.get_processing_operation(self.output_root)
         await op.exec()
@@ -306,7 +310,7 @@ class Course:
             if not topic_path:
                 logger.error(f"Topic not found: {topic_spec.id}")
                 continue
-            topic = Topic(id=topic_spec.id, section=section, path=topic_path)
+            topic = Topic.from_dir(id=topic_spec.id, section=section, path=topic_path)
             topic.build_file_map()
             section.topics.append(topic)
 
@@ -319,7 +323,7 @@ class Course:
             for topic in module.iterdir():
                 topic_id = simplify_ordered_name(topic.name)
                 if self._topic_map.get(topic_id):
-                    logger.error(f"Duplicate topic id: {topic_id}")
+                    logger.warning(f"Duplicate topic id: {topic_id}")
                     continue
                 self._topic_map[topic_id] = topic
         logger.debug(f"Built topic map with {len(self._topic_map)} topics")

@@ -37,7 +37,7 @@ class DrawioConverter:
             self.nats_client = await nats.connect(NATS_URL)
             logger.info(f"Connected to NATS at {NATS_URL}")
         except Exception as e:
-            logger.error(f"Error connecting to NATS: {e}")
+            logger.exception("Error connecting to NATS: %s", e)
             raise
 
     async def subscribe_to_events(self):
@@ -61,12 +61,12 @@ class DrawioConverter:
             response = json.dumps({"result": encoded_result.decode("utf-8")})
             await msg.respond(response.encode("utf-8"))
         except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error: {e}")
+            logger.exception("JSON decode error: %s", e)
             await msg.respond(
                 json.dumps({"error": f"JSON decode error {e}"}).encode("utf-8")
             )
         except Exception as e:
-            logger.error(f"Error while handling event: {e}")
+            logger.exception("Error while handling event: %s", e)
             await msg.respond(json.dumps({"error": str(e)}).encode("utf-8"))
 
     async def try_to_process_payload(self, data):
@@ -74,7 +74,7 @@ class DrawioConverter:
             payload = DrawioPayload(**data)
             return await self.process_drawio_file(payload)
         except TypeError as e:
-            logger.error(f"Error: {e}")
+            logger.exception("Error while processing payload: %s", e)
             raise
 
     async def process_drawio_file(self, data: DrawioPayload) -> bytes:

@@ -140,4 +140,4 @@ class ProcessNotebookOperation(Operation):
             else:
                 logger.error(f"Notebook: reply not a dict {result}")
         except Exception as e:
-            logger.error(f"Notebook: Error {e}")
+            logger.exception("Notebook: Error while processing request: %s", e)

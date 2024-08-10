@@ -106,4 +106,4 @@ def section_1(course):
 def topic_1(section_1):
     from clx.course import Topic
     path = DATA_DIR / "slides/module_000_test_1/topic_100_some_topic_from_test_1"
-    return Topic(id="some_topic", section=section_1, path=path)
+    return Topic.from_dir(id="some_topic", section=section_1, path=path)
