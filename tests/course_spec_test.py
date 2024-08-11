@@ -3,19 +3,19 @@ import io
 from clx.course_spec import CourseSpec, TopicSpec, parse_multilang
 from clx.utils.text_utils import Text
 
-from conftest import COURSE_XML, course_xml
+from conftest import COURSE_1_XML, course_1_xml
 
 
-def test_parse_multilang(course_xml):
-    assert parse_multilang(course_xml, "name") == Text(de="Mein Kurs", en="My Course")
-    assert parse_multilang(course_xml, "github") == Text(
+def test_parse_multilang(course_1_xml):
+    assert parse_multilang(course_1_xml, "name") == Text(de="Mein Kurs", en="My Course")
+    assert parse_multilang(course_1_xml, "github") == Text(
         de="https://github.com/hoelzl/my-course-de",
         en="https://github.com/hoelzl/my-course-en",
     )
 
 
-def test_parse_sections(course_xml):
-    sections = CourseSpec.parse_sections(course_xml)
+def test_parse_sections(course_1_xml):
+    sections = CourseSpec.parse_sections(course_1_xml)
     assert len(sections) == 2
     assert sections[0].name == Text(de="Woche 1", en="Week 1")
     assert sections[0].topics == [
@@ -26,8 +26,8 @@ def test_parse_sections(course_xml):
     assert sections[1].topics == [TopicSpec("another_topic_from_test_1")]
 
 
-def test_parse_dictionaries(course_xml):
-    dict_groups = CourseSpec.parse_dict_groups(course_xml)
+def test_parse_dictionaries(course_1_xml):
+    dict_groups = CourseSpec.parse_dict_groups(course_1_xml)
     assert len(dict_groups) == 3
 
     assert dict_groups[0].name == Text(de='Code/Solutions', en='Code/Solutions')
@@ -44,7 +44,7 @@ def test_parse_dictionaries(course_xml):
 
 
 def test_from_file():
-    xml_stream = io.StringIO(COURSE_XML)
+    xml_stream = io.StringIO(COURSE_1_XML)
     course = CourseSpec.from_file(xml_stream)
     assert course.name == Text(de="Mein Kurs", en="My Course")
     assert course.prog_lang == "python"

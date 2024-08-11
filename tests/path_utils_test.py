@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from clx.utils.path_utils import Format, Lang, Mode, is_slides_file, output_specs
+from clx.utils.path_utils import Format, Lang, Mode, is_slides_file, output_specs, \
+    simplify_ordered_name
 
 
 def test_is_slides_file():
@@ -11,8 +12,8 @@ def test_is_slides_file():
     assert not is_slides_file(Path("test.py"))
 
 
-def test_output_spec(course):
-    unit = list(output_specs(course, Path("slides_1.py")))
+def test_output_spec(course_1):
+    unit = list(output_specs(course_1, Path("slides_1.py")))
     assert len(unit) == 14
 
     # Half the outputs should be in each language.
@@ -35,3 +36,8 @@ def test_output_spec(course):
     assert os1.lang == Lang.DE
     assert os1.format == Format.HTML
     assert os1.mode == Mode.CODE_ALONG
+
+
+def test_simplify_ordered_name():
+    assert simplify_ordered_name("topic_100_abc_def") == "abc_def"
+    assert simplify_ordered_name("topic_100_abc_def.py") == "abc_def"

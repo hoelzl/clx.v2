@@ -1,0 +1,10 @@
+@startuml
+
+class "MyClass" {
+    -field: int
+    +method1(): str
+    +method2(): bool
+    +method3(): int
+}
+
+@enduml

@@ -9,13 +9,12 @@ from attrs import Factory, define, frozen
 
 from clx.course_spec import CourseSpec, DictGroupSpec
 from clx.course_file import CourseFile, Notebook
+from clx.topic import Topic
 from clx.utils.div_uils import File, execution_stages
 from clx.utils.nats_utils import NATS_URL, connect_client_with_retry
 from clx.utils.path_utils import (
     SKIP_DIRS_FOR_OUTPUT,
-    SKIP_DIRS_PATTERNS,
-    is_ignored_dir_for_course,
-    is_in_dir,
+    SKIP_DIRS_PATTERNS, is_in_dir,
     output_path_for,
     simplify_ordered_name,
 )
@@ -25,63 +24,6 @@ if TYPE_CHECKING:
     from clx.operation import Operation
 
 logger = logging.getLogger(__name__)
-
-
-@frozen
-class Topic:
-    id: str
-    section: "Section"
-    path: Path
-    _file_map: dict[Path, CourseFile] = Factory(dict)
-
-    @classmethod
-    def from_dir(cls, id, section, path):  # noqa
-        return cls(id=id, section=section, path=path)
-
-    @property
-    def course(self) -> "Course":
-        return self.section.course
-
-    @property
-    def files(self) -> list[CourseFile]:
-        return list(self._file_map.values())
-
-    @property
-    def notebooks(self) -> list[Notebook]:
-        return [file for file in self.files if isinstance(file, Notebook)]
-
-    def file_for_path(self, path: Path) -> CourseFile:
-        return self._file_map.get(path)
-
-    def add_file(self, path: Path):
-        # We can add files that don't exist yet (e.g. generated files), so don't check
-        # if the path resolves to a file.
-        if not self.matches_path(path, False):
-            logger.debug(f"Path not within topic: {path}")
-            return
-        if self.file_for_path(path):
-            logger.debug(f"Duplicate path when adding file: {path}")
-            return
-        if path.is_dir():
-            logger.warning(f"Trying to add a directory to topic {self.id!r}: {path}")
-            return
-        try:
-            self._file_map[path] = CourseFile.from_path(self.course, path, self)
-        except Exception as e:
-            logger.exception("Error adding file %s: %s", path.name, e)
-
-    def matches_path(self, path: Path, check_is_file: bool = True) -> bool:
-        """Returns True if the path is within the topic directory."""
-        return is_in_dir(path, self.path, check_is_file)
-
-    def build_file_map(self):
-        logger.debug(f"Building file map for {self.path}")
-        for file in sorted(list(self.path.iterdir())):
-            if file.is_file():
-                self.add_file(file)
-            elif file.is_dir() and not is_ignored_dir_for_course(file):
-                for sub_file in file.glob("**/*"):
-                    self.add_file(sub_file)
 
 
 @define
@@ -310,7 +252,7 @@ class Course:
             if not topic_path:
                 logger.error(f"Topic not found: {topic_spec.id}")
                 continue
-            topic = Topic.from_dir(id=topic_spec.id, section=section, path=topic_path)
+            topic = Topic.from_id(id=topic_spec.id, section=section, path=topic_path)
             topic.build_file_map()
             section.topics.append(topic)
 
@@ -320,6 +262,9 @@ class Course:
             return
         self._topic_map.clear()
         for module in (self.course_root / "slides").iterdir():
+            if not module.is_dir():
+                logger.debug(f"Skipping non-directory in module dir: {module}")
+                continue
             for topic in module.iterdir():
                 topic_id = simplify_ordered_name(topic.name)
                 if self._topic_map.get(topic_id):

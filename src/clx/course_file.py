@@ -24,7 +24,8 @@ from clx.utils.path_utils import (
 from clx.utils.text_utils import Text, as_dir_name
 
 if TYPE_CHECKING:
-    from clx.course import Course, Section, Topic
+    from clx.course import Course, Section
+    from clx.topic import Topic
 
 logger = logging.getLogger(__name__)
 

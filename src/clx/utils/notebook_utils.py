@@ -27,11 +27,13 @@ def find_images(text: str) -> frozenset[str]:
     return frozenset(IMG_REGEX.findall(text))
 
 
-IMPORT_REGEX = re.compile(r"(?:from\s+(\S+)\s+import|import\s+(\S+))", re.MULTILINE)
+IMPORT_REGEX = re.compile(r"^\s*from\s+([^\s\"']+)\s+import|^\s*import\s+([^\s\"']+)")
 
 
 def find_imports(text: str) -> frozenset[str]:
-    return frozenset(match.group(1) or match.group(2) for match in
-                     IMPORT_REGEX.finditer(text))
-
-
+    matches = []
+    for line in text.splitlines():
+        match = IMPORT_REGEX.match(line)
+        if match:
+            matches.append(match[1] or match[2])
+    return frozenset(match for match in matches)

@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 SLIDES_PREFIX = "slides_"
+TOPIC_PREFIX = "topic_"
 
 SKIP_DIRS_FOR_COURSE = frozenset(
     (
@@ -83,8 +84,8 @@ IGNORE_PATH_REGEX = re.compile(r"(.*\.egg-info.*|.*cmake-build-.*)")
 def is_slides_file(input_path: Path) -> bool:
     return (
         input_path.name.startswith(SLIDES_PREFIX)
-        and input_path.suffix in SUPPORTED_PROG_LANG_EXTENSIONS
-    )
+        or input_path.name.startswith(TOPIC_PREFIX)
+    ) and input_path.suffix in SUPPORTED_PROG_LANG_EXTENSIONS
 
 
 def is_ignored_dir_for_course(dir_path: Path) -> bool:
@@ -106,6 +107,7 @@ def is_ignored_dir_for_output(dir_path: Path) -> bool:
 
 
 def simplify_ordered_name(name: str, prefix: str | None = None) -> str:
+    name = name.rsplit(".", maxsplit=1)[0]
     parts = name.split("_")
     if prefix:
         assert parts[0] == prefix

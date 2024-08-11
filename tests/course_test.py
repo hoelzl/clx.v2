@@ -1,20 +1,16 @@
-import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from clx.course import Course
 from clx.course_file import Notebook
 from clx.utils.text_utils import Text
+from tests.conftest import DATA_DIR, OUTPUT_DIR
 
 
-DATA_DIR = Path(__file__).parent / "data"
-OUTPUT_DIR = Path(__file__).parent / "output"
-
-
-def test_build_topic_map(course_spec):
-    course = Course(course_spec, DATA_DIR, OUTPUT_DIR)
+def test_build_topic_map(course_1_spec):
+    course = Course(course_1_spec, DATA_DIR, OUTPUT_DIR)
     course._build_topic_map()
-    assert len(course._topic_map) == 3
+    assert len(course._topic_map) == 5
 
     id1 = course._topic_map["some_topic_from_test_1"]
     assert id1.parent.name == "module_000_test_1"
@@ -22,15 +18,15 @@ def test_build_topic_map(course_spec):
 
     id2 = course._topic_map["another_topic_from_test_1"]
     assert id2.parent.name == "module_000_test_1"
-    assert id2.name == "topic_110_another_topic_from_test_1"
+    assert id2.name == "topic_110_another_topic_from_test_1.py"
 
     id3 = course._topic_map["a_topic_from_test_2"]
     assert id3.parent.name == "module_010_test_2"
     assert id3.name == "topic_100_a_topic_from_test_2"
 
 
-def test_course_from_spec_sections(course_spec):
-    course = Course.from_spec(course_spec, DATA_DIR, OUTPUT_DIR)
+def test_course_from_spec_sections(course_1_spec):
+    course = Course.from_spec(course_1_spec, DATA_DIR, OUTPUT_DIR)
     assert len(course.sections) == 2
 
     section_1 = course.sections[0]
@@ -65,17 +61,25 @@ def test_course_from_spec_sections(course_spec):
     topic_21 = section_2.topics[0]
     assert topic_21.id == "another_topic_from_test_1"
     assert topic_21.section == section_2
-    assert topic_21.path.name == "topic_110_another_topic_from_test_1"
+    assert topic_21.path.name == "topic_110_another_topic_from_test_1.py"
+
+    nb3 = topic_21.notebooks[0]
+    assert nb3.path.name == "topic_110_another_topic_from_test_1.py"
+    assert isinstance(nb3, Notebook)
+    assert nb3.title == Text(
+        de="Mehr Folien von Test 1", en="Another Topic from Test 1"
+    )
+    assert nb3.number_in_section == 1
 
 
-def test_course_dict_groups(course_spec):
+def test_course_dict_groups(course_1_spec):
     def src_path(dir_: str):
         return DATA_DIR / dir_
 
     def out_path(dir_: str):
         return OUTPUT_DIR / dir_
 
-    course = Course.from_spec(course_spec, DATA_DIR, OUTPUT_DIR)
+    course = Course.from_spec(course_1_spec, DATA_DIR, OUTPUT_DIR)
 
     assert len(course.dict_groups) == 3
 
@@ -107,8 +111,8 @@ def test_course_dict_groups(course_spec):
     assert group3.output_dirs(False, "en") == (out_path("public/En/My Course"),)
 
 
-def test_course_files(course_spec):
-    course = Course.from_spec(course_spec, DATA_DIR, OUTPUT_DIR)
+def test_course_files(course_1_spec):
+    course = Course.from_spec(course_1_spec, DATA_DIR, OUTPUT_DIR)
 
     assert len(course.files) == 9
     assert {file.path.name for file in course.files} == {
@@ -118,14 +122,14 @@ def test_course_files(course_spec):
         "my_drawing.png",
         "my_image.png",
         "slides_a_topic_from_test_2.py",
-        "slides_another_topic_from_test_1.py",
         "slides_some_topic_from_test_1.py",
         "test.data",
+        "topic_110_another_topic_from_test_1.py",
     }
 
 
-def test_course_notebooks(course_spec):
-    course = Course.from_spec(course_spec, DATA_DIR, OUTPUT_DIR)
+def test_course_notebooks(course_1_spec):
+    course = Course.from_spec(course_1_spec, DATA_DIR, OUTPUT_DIR)
 
     assert len(course.notebooks) == 3
 
@@ -140,41 +144,15 @@ def test_course_notebooks(course_spec):
     assert nb2.number_in_section == 2
 
     nb3 = course.notebooks[2]
-    assert nb3.path.name == "slides_another_topic_from_test_1.py"
+    assert nb3.path.name == "topic_110_another_topic_from_test_1.py"
     assert nb3.title == Text(
         de="Mehr Folien von Test 1", en="Another Topic from Test 1"
     )
     assert nb3.number_in_section == 1
 
 
-def test_topic_matches_path(topic_1):
-    # Existing slides in topic dir match
-    assert topic_1.matches_path(
-        topic_1.path / "slides_some_topic_from_test_1.py", False
-    )
-    # New slides in topic dir match
-    assert topic_1.matches_path(topic_1.path / "slides_new_topic.py", False)
-    # Images in the img/ subdirectory match
-    assert topic_1.matches_path(topic_1.path / "img/my_image.png", False)
-    # PlantUML files in the pu/ subdirectory match
-    assert topic_1.matches_path(topic_1.path / "pu/my_diag.pu", False)
-    # DrawIO files in the drawio/ subdirectory match
-    assert topic_1.matches_path(topic_1.path / "drawio/my_drawing.drawio", False)
-    # Deeply nested data files match
-    assert topic_1.matches_path(topic_1.path / "data/more_data/csv/test.csv", False)
-
-    # Files in other topics do not match
-    other_topic = Path(DATA_DIR / "module_010_test_2" / "topic_200_other")
-    assert not topic_1.matches_path(
-        other_topic / "slides_a_topic_from_test_2.py", False
-    )
-
-    # Files in the parent module do not match
-    assert not topic_1.matches_path(topic_1.path.parent / "slides_in_parent.py", False)
-
-
-def test_add_file_to_course(course_spec):
-    unit = Course.from_spec(course_spec, DATA_DIR, OUTPUT_DIR)
+def test_add_file_to_course(course_1_spec):
+    unit = Course.from_spec(course_1_spec, DATA_DIR, OUTPUT_DIR)
     assert len(unit.files) == 9
     topic_1 = unit.topics[0]
     topic_2 = unit.topics[1]
@@ -207,10 +185,10 @@ def test_add_file_to_course(course_spec):
     assert unit.find_file(file_4) is None
 
 
-def test_course_dict_croups_copy(course_spec):
+def test_course_dict_croups_copy(course_1_spec):
     with TemporaryDirectory() as output_dir:
         output_dir = Path(output_dir)
-        course = Course.from_spec(course_spec, DATA_DIR, output_dir)
+        course = Course.from_spec(course_1_spec, DATA_DIR, output_dir)
         for dict_group in course.dict_groups:
             dict_group.copy_to_output(True, "de")
             dict_group.copy_to_output(False, "en")
