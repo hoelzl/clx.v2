@@ -86,7 +86,7 @@ class NotebookProcessor:
         self.id_generator = CellIdGenerator()
 
     async def process_notebook(self, payload: NotebookPayload):
-        logger.info(f"Processing notebook {payload.notebook_path}")
+        logger.info(f"Processing notebook '{payload.notebook_path}'")
         expanded_nb = await self.load_and_expand_jinja_template(
             payload.notebook_text, payload.notebook_path
         )

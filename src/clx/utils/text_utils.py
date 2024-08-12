@@ -43,15 +43,23 @@ _REPLACEMENT_PARENS = "()" * (len(_PARENS_TO_REPLACE) // 2)
 _CHARS_TO_REPLACE = r"/\$#%&<>*=^€|"
 _REPLACEMENT_CHARS = "_" * len(_CHARS_TO_REPLACE)
 _CHARS_TO_DELETE = r""";!?"'`.:"""
-_STRING_TRANSLATION_TABLE = str.maketrans(
+_FILE_STRING_TRANSLATION_TABLE = str.maketrans(
     _PARENS_TO_REPLACE + _CHARS_TO_REPLACE,
     _REPLACEMENT_PARENS + _REPLACEMENT_CHARS,
     _CHARS_TO_DELETE,
 )
-
+_STREAM_REPLACEMENT_CHARS = " -\t\n" + _PARENS_TO_REPLACE + _CHARS_TO_REPLACE + _CHARS_TO_DELETE
+_STREAM_STRING_TRANSLATION_TABLE = str.maketrans(
+    _STREAM_REPLACEMENT_CHARS, "_" * len(_STREAM_REPLACEMENT_CHARS)
+)
 
 def sanitize_file_name(text: str):
-    sanitized_text = text.strip().translate(_STRING_TRANSLATION_TABLE)
+    sanitized_text = text.strip().translate(_FILE_STRING_TRANSLATION_TABLE)
+    return sanitized_text
+
+
+def sanitize_stream_name(text: str):
+    sanitized_text = text.strip().translate(_STREAM_STRING_TRANSLATION_TABLE)
     return sanitized_text
 
 

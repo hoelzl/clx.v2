@@ -55,7 +55,10 @@ class CourseFile(File):
 
     @property
     def relative_path(self) -> Path:
-        return self.path.relative_to(self.topic.path)
+        if self.topic.path.is_dir():
+            return self.path.relative_to(self.topic.path)
+        else:
+            return self.path.relative_to(self.topic.path.parent)
 
     def output_dir(self, target_dir: Path, lang: str) -> Path:
         return target_dir / self.section.name[lang]

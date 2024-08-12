@@ -92,6 +92,7 @@ class DictGroup:
                 logger.error(f"Source directory does not exist: {source_dir}")
                 continue
             output_dir = self.output_path(is_speaker, lang) / relative_path
+            logger.debug(f"Copying {source_dir} to {output_dir}")
             output_dir.mkdir(parents=True, exist_ok=True)
             shutil.copytree(
                 source_dir,
@@ -102,7 +103,7 @@ class DictGroup:
                 ),
             )
 
-    def get_processing_operation(self) -> "Operation":
+    async def get_processing_operation(self) -> "Operation":
         from clx.operation import Concurrently
         from clx.file_ops import CopyDictGroupOperation
 
@@ -229,11 +230,13 @@ class Course:
             operations = []
             for file in self.files:
                 if file.execution_stage == stage:
+                    logger.debug(f"Processing file {file.path}")
                     operations.append(
                         await file.get_processing_operation(self.output_root)
                     )
             for dict_group in self.dict_groups:
-                operations.append(dict_group.get_processing_operation())
+                logger.debug(f"Processing dict group {dict_group.name}")
+                operations.append(await dict_group.get_processing_operation())
             await asyncio.gather(
                 *[op.exec() for op in operations], return_exceptions=True
             )

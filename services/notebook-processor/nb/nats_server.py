@@ -41,7 +41,7 @@ async def connect_client_with_retry(nats_url: str, num_retries: int = 5):
 
 
 async def process_payload(payload: NotebookPayload):
-    logger.debug(f"Processing notebook")
+    logger.debug(f"Processing notebook payload for '{payload.reply_stream}'")
 
     output_spec = create_output_spec(
         output_type=payload.output_type,

@@ -11,7 +11,7 @@ from attr import frozen
 from clx.operation import Operation
 from clx.utils.nats_utils import process_image_request
 from clx.utils.path_utils import is_image_file
-from clx.utils.text_utils import unescape
+from clx.utils.text_utils import sanitize_stream_name, unescape
 
 if TYPE_CHECKING:
     from clx.course import DictGroup
@@ -79,7 +79,8 @@ class CopyFileOperation(Operation):
 
     async def exec(self, *args, **kwargs) -> Any:
         logger.info(f"Copying {self.input_file.relative_path} to {self.output_file}")
-        self.output_file.parent.mkdir(parents=True, exist_ok=True)
+        if not self.output_file.parent.exists():
+            self.output_file.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(self.input_file.path, self.output_file)
         self.input_file.generated_outputs.add(self.output_file)
 
@@ -90,11 +91,14 @@ class CopyDictGroupOperation(Operation):
     lang: str
 
     async def exec(self, *args, **kwargs) -> Any:
-        logger.info(f"Copying {self.dict_group.output_path(is_speaker, self.lang)}")
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(
-            None, self.dict_group.copy_to_output(is_speaker, self.lang)
-        )
+        logger.debug(f"Copying dict group {self.dict_group.name} for "
+                     f"{self.lang}")
+        for is_speaker in [True, False]:
+            logger.info(f"Copying {self.dict_group.output_path(is_speaker, self.lang)}")
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(
+                None, self.dict_group.copy_to_output(is_speaker, self.lang)
+            )
 
 
 @frozen
@@ -107,6 +111,16 @@ class ProcessNotebookOperation(Operation):
     prog_lang: str
     nats_connection: nats.NATS
 
+    @property
+    def reply_stream(self) -> str:
+        id_ = self.input_file.topic.id
+        num = self.input_file.number_in_section
+        lang = self.lang
+        format_ = self.format
+        mode = self.mode
+        reply_topic = f"{id_}_{num}_{lang}_{format_}_{mode}"
+        return sanitize_stream_name(f"nb.completed.{reply_topic}")
+
     async def exec(self, *args, **kwargs) -> Any:
         logger.info(
             f"Processing notebook '{self.input_file.relative_path}' "
@@ -115,13 +129,14 @@ class ProcessNotebookOperation(Operation):
         await self.process_request()
         self.input_file.generated_outputs.add(self.output_file)
 
-    async def process_request(self, timeout=120):
+    async def process_request(self, timeout=5):
         try:
             nc = self.nats_connection
             logger.debug(f"Notebook: Preparing payload {self.input_file.path}")
             payload = {
                 "notebook_text": self.input_file.path.read_text(),
                 "notebook_path": self.input_file.relative_path.name,
+                "reply_stream": self.reply_stream,
                 "prog_lang": self.prog_lang,
                 "language": self.lang,
                 "notebook_format": self.format,
@@ -142,7 +157,8 @@ class ProcessNotebookOperation(Operation):
             if isinstance(result, dict):
                 if notebook := result.get("result"):
                     logger.debug(f"Notebook: Writing notebook to {self.output_file}")
-                    self.output_file.parent.mkdir(parents=True, exist_ok=True)
+                    if not self.output_file.parent.exists():
+                        self.output_file.parent.mkdir(parents=True, exist_ok=True)
                     self.output_file.write_text(notebook)
                 elif error := result.get("error"):
                     logger.error(f"Notebook: Error: {error}")
