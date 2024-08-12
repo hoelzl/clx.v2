@@ -10,17 +10,17 @@ from tests.conftest import DATA_DIR, OUTPUT_DIR
 def test_build_topic_map(course_1_spec):
     course = Course(course_1_spec, DATA_DIR, OUTPUT_DIR)
     course._build_topic_map()
-    assert len(course._topic_map) == 5
+    assert len(course._topic_path_map) == 5
 
-    id1 = course._topic_map["some_topic_from_test_1"]
+    id1 = course._topic_path_map["some_topic_from_test_1"]
     assert id1.parent.name == "module_000_test_1"
     assert id1.name == "topic_100_some_topic_from_test_1"
 
-    id2 = course._topic_map["another_topic_from_test_1"]
+    id2 = course._topic_path_map["another_topic_from_test_1"]
     assert id2.parent.name == "module_000_test_1"
     assert id2.name == "topic_110_another_topic_from_test_1.py"
 
-    id3 = course._topic_map["a_topic_from_test_2"]
+    id3 = course._topic_path_map["a_topic_from_test_2"]
     assert id3.parent.name == "module_010_test_2"
     assert id3.name == "topic_100_a_topic_from_test_2"
 

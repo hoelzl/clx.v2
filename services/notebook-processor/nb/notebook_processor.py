@@ -15,6 +15,7 @@ from nbconvert.preprocessors import ExecutePreprocessor
 from nbformat import NotebookNode
 from nbformat.validator import normalize
 
+from .payload import NotebookPayload
 from .output_spec import OutputSpec
 from .utils.jupyter_utils import (
     Cell,
@@ -27,8 +28,12 @@ from .utils.jupyter_utils import (
     warn_on_invalid_code_tags,
     warn_on_invalid_markdown_tags,
 )
-from .utils.prog_lang_utils import jinja_prefix_for, jupytext_format_for, \
-    kernelspec_for, language_info
+from .utils.prog_lang_utils import (
+    jinja_prefix_for,
+    jupytext_format_for,
+    kernelspec_for,
+    language_info,
+)
 
 
 def string_to_list(string: str) -> list[str]:
@@ -80,23 +85,28 @@ class NotebookProcessor:
         self.output_spec = output_spec
         self.id_generator = CellIdGenerator()
 
-    async def process_notebook(self, notebook_text: str, prog_lang: str):
-        expanded_nb = await self.load_and_expand_jinja_template(notebook_text)
-        processed_nb = self.process_notebook_for_spec(expanded_nb, prog_lang)
-        result = await self.create_contents(processed_nb)
+    async def process_notebook(self, payload: NotebookPayload):
+        logger.info(f"Processing notebook {payload.notebook_path}")
+        expanded_nb = await self.load_and_expand_jinja_template(
+            payload.notebook_text, payload.notebook_path
+        )
+        processed_nb = self.process_notebook_for_spec(expanded_nb, payload)
+        result = await self.create_contents(processed_nb, payload)
         logger.debug(f"Processed notebook. Result: {result[:100]}...")
         return result
 
-    async def load_and_expand_jinja_template(self, notebook_text: str) -> str:
+    async def load_and_expand_jinja_template(
+        self, notebook_text: str, notebook_file: str
+    ) -> str:
         logger.debug("Loading and expanding Jinja template")
         jinja_env = self._create_jinja_environment()
         nb_template = jinja_env.from_string(
             notebook_text,
             globals=self._create_jinja_globals(self.output_spec),
         )
-        logger.debug("Jinja template created")
+        logger.debug(f"Jinja template created for {notebook_file}")
         expanded_nb = await nb_template.render_async()
-        logger.debug("Jinja template expanded")
+        logger.debug(f"Jinja template expanded for {notebook_file}")
         return expanded_nb
 
     def _create_jinja_environment(self):
@@ -121,32 +131,37 @@ class NotebookProcessor:
             "lang": output_spec.lang,
         }
 
-    def process_notebook_for_spec(self, expanded_nb: str, prog_lang) -> NotebookNode:
+    def process_notebook_for_spec(
+        self, expanded_nb: str, payload: NotebookPayload
+    ) -> NotebookNode:
         jupytext_format = jupytext_format_for(self.output_spec.prog_lang)
-        logger.debug(f"Processing notebook for in format "
-                     f"'{self.output_spec.notebook_format}' with Jupytext format "
-                     f"'{jupytext_format}'")
-        nb = jupytext.reads(expanded_nb,
-                            fmt=jupytext_format)
-        processed_nb = self._process_notebook_node(nb, prog_lang)
+        logger.debug(
+            f"Processing notebook for in format "
+            f"'{self.output_spec.notebook_format}' with Jupytext format "
+            f"'{jupytext_format}'"
+        )
+        nb = jupytext.reads(expanded_nb, fmt=jupytext_format)
+        processed_nb = self._process_notebook_node(nb, payload)
         return processed_nb
 
-    def _process_notebook_node(self, nb: NotebookNode, prog_lang: str) -> NotebookNode:
+    def _process_notebook_node(
+        self, nb: NotebookNode, payload: NotebookPayload
+    ) -> NotebookNode:
         new_cells = [
-            self._process_cell(cell, index)
+            self._process_cell(cell, index, payload)
             for index, cell in enumerate(nb.get("cells", []))
             if self.output_spec.is_cell_included(cell)
         ]
         nb.cells = new_cells
-        nb.metadata["language_info"] = language_info(prog_lang)
-        nb.metadata["kernelspec"] = kernelspec_for(prog_lang)
+        nb.metadata["language_info"] = language_info(payload.prog_lang)
+        nb.metadata["kernelspec"] = kernelspec_for(payload.prog_lang)
         _, normalized_nb = normalize(nb)
         return normalized_nb
 
-    def _process_cell(self, cell: Cell, index: int) -> Cell:
+    def _process_cell(self, cell: Cell, index: int, payload: NotebookPayload) -> Cell:
         self._generate_cell_metadata(cell, index)
         if LOG_CELL_PROCESSING:
-            logger.debug(f"Processing cell {cell}")
+            logger.debug(f"Processing cell {cell} of {payload.notebook_path}")
         if is_code_cell(cell):
             return self._process_code_cell(cell)
         elif is_markdown_cell(cell):
@@ -191,22 +206,25 @@ class NotebookProcessor:
             else:
                 cell["source"] = prefix
 
-    async def create_contents(self, processed_nb: NotebookNode):
+    async def create_contents(
+        self, processed_nb: NotebookNode, payload: NotebookPayload
+    ) -> str:
         try:
             if self.output_spec.notebook_format == "html":
-                result = await self._create_using_nbconvert(processed_nb)
+                result = await self._create_using_nbconvert(processed_nb, payload)
             else:
                 result = await self._create_using_jupytext(processed_nb)
             return result
-        except RuntimeError as err:
-            logging.error(f"Failed to convert notebook to HTML.")
-            logging.error(err)
+        except RuntimeError as e:
+            logging.exception("Failed to convert notebook %s to HTML: %s", e)
 
-    async def _create_using_nbconvert(self, processed_nb):
+    async def _create_using_nbconvert(self, processed_nb, payload: NotebookPayload):
         traitlets.log.get_logger().addFilter(DontWarnForMissingAltTags())
         if self.output_spec.evaluate_for_html:
             if any(is_code_cell(cell) for cell in processed_nb.get("cells", [])):
-                logger.debug(f"Evaluating and writing notebook.")
+                logger.debug(
+                    "Evaluating and writing notebook " f"{payload.notebook_path}"
+                )
                 try:
                     # To silence warnings about frozen modules...
                     os.environ["PYDEVD_DISABLE_FILE_VALIDATION"] = "1"
@@ -222,6 +240,9 @@ class NotebookProcessor:
                             if platform.system() == "Windows"
                             else Path("/tmp")
                         )
+                        for extra_file, contents in payload.other_files.items():
+                            logger.debug(f"Writing extra file {extra_file}")
+                            (path / extra_file).write_text(contents)
                         await loop.run_in_executor(
                             None,
                             lambda: ep.preprocess(
@@ -229,11 +250,17 @@ class NotebookProcessor:
                                 resources={"metadata": {"path": path}},
                             ),
                         )
-                except Exception:
-                    print(f"Error while processing notebook!")
+                except Exception as e:
+                    logger.exception(
+                        f"Error while processing notebook %s: %s",
+                        payload.notebook_path,
+                        e,
+                    )
                     raise
             else:
-                logger.debug(f"NotebookDataSource contains no code cells.")
+                logger.debug(
+                    f"Notebook {payload.notebook_path} contains " "no code cells."
+                )
         html_exporter = HTMLExporter(template_name="classic")
         (body, _resources) = html_exporter.from_notebook_node(processed_nb)
         return body

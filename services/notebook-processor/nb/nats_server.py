@@ -2,12 +2,11 @@ import asyncio
 import json
 import logging
 import os
-from dataclasses import dataclass
-from enum import Enum
 
 import nats
 from nats.aio.msg import Msg
 
+from .payload import NotebookPayload
 from .notebook_processor import NotebookProcessor
 from .output_spec import create_output_spec
 
@@ -26,15 +25,6 @@ logger = logging.getLogger(__name__)
 
 # Global flag to signal shutdown
 shutdown_flag = asyncio.Event()
-
-
-@dataclass
-class NotebookPayload:
-    notebook_text: str
-    prog_lang: str
-    language: str
-    notebook_format: str
-    output_type: str
 
 
 async def connect_client_with_retry(nats_url: str, num_retries: int = 5):
@@ -61,7 +51,7 @@ async def process_payload(payload: NotebookPayload):
     )
     logger.debug("Output spec created")
     processor = NotebookProcessor(output_spec)
-    result = await processor.process_notebook(payload.notebook_text, payload.prog_lang)
+    result = await processor.process_notebook(payload)
     logger.debug(f"Processed notebook: {result[:100]}")
     return result
 

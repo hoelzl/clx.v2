@@ -14,7 +14,9 @@ from clx.utils.div_uils import File, execution_stages
 from clx.utils.nats_utils import NATS_URL, connect_client_with_retry
 from clx.utils.path_utils import (
     SKIP_DIRS_FOR_OUTPUT,
-    SKIP_DIRS_PATTERNS, is_in_dir,
+    SKIP_DIRS_PATTERNS,
+    is_ignored_dir_for_course,
+    is_in_dir,
     output_path_for,
     simplify_ordered_name,
 )
@@ -119,7 +121,7 @@ class Course:
     output_root: Path
     sections: list[Section] = Factory(list)
     dict_groups: list[DictGroup] = Factory(list)
-    _topic_map: dict[str, Path] = Factory(dict)
+    _topic_path_map: dict[str, Path] = Factory(dict)
     _nats_connection: nats.NATS | None = None
 
     @classmethod
@@ -248,7 +250,7 @@ class Course:
 
     def _build_topics(self, section, section_spec):
         for topic_spec in section_spec.topics:
-            topic_path = self._topic_map.get(topic_spec.id)
+            topic_path = self._topic_path_map.get(topic_spec.id)
             if not topic_path:
                 logger.error(f"Topic not found: {topic_spec.id}")
                 continue
@@ -258,20 +260,32 @@ class Course:
 
     def _build_topic_map(self, rebuild: bool = False):
         logger.debug(f"Building topic map for {self.course_root}")
-        if len(self._topic_map) > 0 and not rebuild:
+        if len(self._topic_path_map) > 0 and not rebuild:
             return
-        self._topic_map.clear()
+        self._topic_path_map.clear()
         for module in (self.course_root / "slides").iterdir():
-            if not module.is_dir():
-                logger.debug(f"Skipping non-directory in module dir: {module}")
+            if is_ignored_dir_for_course(module):
+                logger.debug(f"Skipping ignored dir while building topic map: {module}")
                 continue
-            for topic in module.iterdir():
-                topic_id = simplify_ordered_name(topic.name)
-                if self._topic_map.get(topic_id):
-                    logger.warning(f"Duplicate topic id: {topic_id}")
+            if not module.is_dir():
+                logger.debug(
+                    "Skipping non-directory module while building topic map: "
+                    f"{module}"
+                )
+                continue
+            for topic_path in module.iterdir():
+                topic_id = simplify_ordered_name(topic_path.name)
+                if not topic_id:
+                    logger.warning(f"Skipping topic with no id: {topic_path}")
                     continue
-                self._topic_map[topic_id] = topic
-        logger.debug(f"Built topic map with {len(self._topic_map)} topics")
+                if existing_topic_path := self._topic_path_map.get(topic_id):
+                    logger.warning(
+                        f"Duplicate topic id: {topic_id}: "
+                        f"{topic_path} and {existing_topic_path}"
+                    )
+                    continue
+                self._topic_path_map[topic_id] = topic_path
+        logger.debug(f"Built topic map with {len(self._topic_path_map)} topics")
 
     def _build_dict_groups(self):
         for dictionary_spec in self.spec.dictionaries:

@@ -45,6 +45,8 @@ SKIP_DIRS_PATTERNS = ["*.egg-info*", "*cmake-build*"]
 
 PLANTUML_EXTENSIONS = frozenset({".pu", ".puml", ".plantuml"})
 
+IMG_FILE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".svg"})
+
 SUPPORTED_PROG_LANG_EXTENSIONS = frozenset(
     (
         ".py",
@@ -79,6 +81,10 @@ PROG_LANG_TO_EXTENSION = {
 }
 
 IGNORE_PATH_REGEX = re.compile(r"(.*\.egg-info.*|.*cmake-build-.*)")
+
+
+def is_image_file(input_path: Path) -> bool:
+    return input_path.suffix in IMG_FILE_EXTENSIONS
 
 
 def is_slides_file(input_path: Path) -> bool:

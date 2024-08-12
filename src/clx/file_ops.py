@@ -10,6 +10,8 @@ from attr import frozen
 
 from clx.operation import Operation
 from clx.utils.nats_utils import process_image_request
+from clx.utils.path_utils import is_image_file
+from clx.utils.text_utils import unescape
 
 if TYPE_CHECKING:
     from clx.course import DictGroup
@@ -46,7 +48,7 @@ class ConvertPlantUmlFile(Operation):
         await self.process_request()
         self.input_file.generated_outputs.add(self.output_file)
 
-    async def process_request(self, timeout=120):
+    async def process_request(self, timeout=240):
         await process_image_request(
             self, "PlantUML", "plantuml.process", timeout=timeout
         )
@@ -90,8 +92,9 @@ class CopyDictGroupOperation(Operation):
     async def exec(self, *args, **kwargs) -> Any:
         logger.info(f"Copying {self.dict_group.output_path(is_speaker, self.lang)}")
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, self.dict_group.copy_to_output(is_speaker,
-                                                                        self.lang))
+        await loop.run_in_executor(
+            None, self.dict_group.copy_to_output(is_speaker, self.lang)
+        )
 
 
 @frozen
@@ -117,11 +120,17 @@ class ProcessNotebookOperation(Operation):
             nc = self.nats_connection
             logger.debug(f"Notebook: Preparing payload {self.input_file.path}")
             payload = {
+                "notebook_text": self.input_file.path.read_text(),
+                "notebook_path": self.input_file.relative_path.name,
                 "prog_lang": self.prog_lang,
                 "language": self.lang,
                 "notebook_format": self.format,
                 "output_type": self.mode,
-                "notebook_text": self.input_file.path.read_text(),
+                "other_files": {
+                    str(file.relative_path): file.path.read_text()
+                    for file in self.input_file.topic.files
+                    if file != self.input_file and not is_image_file(file.path)
+                },
             }
             logger.debug(f"Notebook: sending request: {payload}")
             reply = await nc.request(
@@ -135,9 +144,11 @@ class ProcessNotebookOperation(Operation):
                     logger.debug(f"Notebook: Writing notebook to {self.output_file}")
                     self.output_file.parent.mkdir(parents=True, exist_ok=True)
                     self.output_file.write_text(notebook)
+                elif error := result.get("error"):
+                    logger.error(f"Notebook: Error: {error}")
                 else:
-                    logger.error(f"Notebook: no result key {result}")
+                    logger.error(f"Notebook: no key 'result' in {unescape(result)}")
             else:
-                logger.error(f"Notebook: reply not a dict {result}")
+                logger.error(f"Notebook: reply not a dict {unescape(result)}")
         except Exception as e:
             logger.exception("Notebook: Error while processing request: %s", e)

@@ -1,4 +1,7 @@
+import io
 import logging
+import re
+from pprint import pprint
 
 from attr import define
 
@@ -50,3 +53,13 @@ _STRING_TRANSLATION_TABLE = str.maketrans(
 def sanitize_file_name(text: str):
     sanitized_text = text.strip().translate(_STRING_TRANSLATION_TABLE)
     return sanitized_text
+
+
+ANSI_ESCAPE_REGEX = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+
+
+def unescape(text_or_dict: str | dict) -> str:
+    with io.StringIO() as buf:
+        pprint(text_or_dict, stream=buf)
+        result = ANSI_ESCAPE_REGEX.sub("", buf.getvalue())
+        return result
