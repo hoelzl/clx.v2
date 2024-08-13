@@ -60,14 +60,14 @@ class FileEventHandler(PatternMatchingEventHandler):
             logging.error(f"Error handling event: {e}")
 
 
-def setup_logging():
-    logging.getLogger().setLevel(logging.DEBUG)
-    logging.getLogger("clx").setLevel(logging.DEBUG)
-    logging.getLogger(__name__).setLevel(logging.DEBUG)
+def setup_logging(log_level):
+    logging.getLogger().setLevel(log_level)
+    logging.getLogger("clx").setLevel(log_level)
+    logging.getLogger(__name__).setLevel(log_level)
 
 
 async def main(spec_file, data_dir, output_dir, watch):
-    setup_logging()
+    setup_logging(logging.INFO)
     if data_dir is None:
         data_dir = spec_file.parents[1]
         logger.debug(f"Data directory set to {data_dir}")

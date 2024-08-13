@@ -59,6 +59,10 @@ class Topic(ABC):
             self._file_map[path] = CourseFile.from_path(self.course, path, self)
         except Exception as e:
             logger.exception("Error adding file %s: %s", path.name, e)
+            # TODO: Maybe reraise the exception instead of failing quietly?
+            # Revisit this once the app is more stable to better investigate the
+            # effects of this change.
+            # raise
 
     def matches_path(self, path: Path, check_is_file: bool = True) -> bool:
         """Returns True if the path is within the topic directory."""

@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
 import nats
-from attr import frozen
+from attrs import define, frozen
 
 from clx.operation import Operation
 from clx.utils.nats_utils import process_image_request
-from clx.utils.path_utils import is_image_file
+from clx.utils.path_utils import is_image_file, is_image_source_file
 from clx.utils.text_utils import sanitize_stream_name, unescape
 
 if TYPE_CHECKING:
@@ -91,8 +91,7 @@ class CopyDictGroupOperation(Operation):
     lang: str
 
     async def exec(self, *args, **kwargs) -> Any:
-        logger.debug(f"Copying dict group {self.dict_group.name} for "
-                     f"{self.lang}")
+        logger.debug(f"Copying dict group {self.dict_group.name} for " f"{self.lang}")
         for is_speaker in [True, False]:
             logger.info(f"Copying {self.dict_group.output_path(is_speaker, self.lang)}")
             loop = asyncio.get_running_loop()
@@ -112,7 +111,7 @@ class ProcessNotebookOperation(Operation):
     nats_connection: nats.NATS
 
     @property
-    def reply_stream(self) -> str:
+    def reply_subject(self) -> str:
         id_ = self.input_file.topic.id
         num = self.input_file.number_in_section
         lang = self.lang
@@ -129,42 +128,63 @@ class ProcessNotebookOperation(Operation):
         await self.process_request()
         self.input_file.generated_outputs.add(self.output_file)
 
-    async def process_request(self, timeout=5):
+    async def process_request(self):
         try:
             nc = self.nats_connection
-            logger.debug(f"Notebook: Preparing payload {self.input_file.path}")
-            payload = {
-                "notebook_text": self.input_file.path.read_text(),
-                "notebook_path": self.input_file.relative_path.name,
-                "reply_stream": self.reply_stream,
-                "prog_lang": self.prog_lang,
-                "language": self.lang,
-                "notebook_format": self.format,
-                "output_type": self.mode,
-                "other_files": {
-                    str(file.relative_path): file.path.read_text()
-                    for file in self.input_file.topic.files
-                    if file != self.input_file and not is_image_file(file.path)
-                },
-            }
+            logger.debug(f"Processing {self.input_file.relative_path} ")
+            sub = await self.nats_connection.subscribe(self.reply_subject)
+            payload = await self.build_payload()
             logger.debug(f"Notebook: sending request: {payload}")
-            reply = await nc.request(
-                "nb.process", json.dumps(payload).encode(), timeout=timeout
+            await nc.publish("nb.process", json.dumps(payload).encode())
+            logger.debug(
+                f"Notebook: Waiting for processed notebook {self.reply_subject}"
             )
-            logger.debug(f"Notebook: Received reply")
-            result = json.loads(reply.data.decode())
-            logger.debug(f"Notebook: Decoded Reply")
-            if isinstance(result, dict):
-                if notebook := result.get("result"):
-                    logger.debug(f"Notebook: Writing notebook to {self.output_file}")
-                    if not self.output_file.parent.exists():
-                        self.output_file.parent.mkdir(parents=True, exist_ok=True)
-                    self.output_file.write_text(notebook)
-                elif error := result.get("error"):
-                    logger.error(f"Notebook: Error: {error}")
-                else:
-                    logger.error(f"Notebook: no key 'result' in {unescape(result)}")
-            else:
-                logger.error(f"Notebook: reply not a dict {unescape(result)}")
+            await self.handle_message(sub)
+            logger.debug(f"Notebook: done with {self.reply_subject} ")
+            await sub.drain()
         except Exception as e:
             logger.exception("Notebook: Error while processing request: %s", e)
+
+    async def handle_message(self, sub):
+        while True:
+            try:
+                msg = await sub.next_msg(timeout=1)
+                self.write_notebook_to_file(msg)
+                break
+            except asyncio.TimeoutError:
+                continue
+
+    def write_notebook_to_file(self, msg):
+        data = json.loads(msg.data.decode())
+        logger.debug(f"Notebook: Decoded message {str(data)[:50]}")
+        if isinstance(data, dict):
+            if notebook := data.get("result"):
+                logger.debug(f"Notebook: Writing notebook to {self.output_file}")
+                if not self.output_file.parent.exists():
+                    self.output_file.parent.mkdir(parents=True, exist_ok=True)
+                self.output_file.write_text(notebook)
+            elif error := data.get("error"):
+                logger.error(f"Notebook: Error: {error}")
+            else:
+                logger.error(f"Notebook: no key 'result' in {unescape(data)}")
+        else:
+            logger.error(f"Notebook: reply not a dict {unescape(data)}")
+
+    async def build_payload(self):
+        notebook_path = self.input_file.relative_path.name
+        return {
+            "notebook_text": self.input_file.path.read_text(),
+            "notebook_path": notebook_path,
+            "reply_subject": self.reply_subject,
+            "prog_lang": self.prog_lang,
+            "language": self.lang,
+            "notebook_format": self.format,
+            "output_type": self.mode,
+            "other_files": {
+                str(file.relative_path): file.path.read_text()
+                for file in self.input_file.topic.files
+                if file != self.input_file
+                and not is_image_file(file.path)
+                and not is_image_source_file(file.path)
+            },
+        }

@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+from dataclasses import dataclass
 
 import nats
 from nats.aio.msg import Msg
@@ -27,6 +28,15 @@ logger = logging.getLogger(__name__)
 shutdown_flag = asyncio.Event()
 
 
+@dataclass
+class ProcessingResult:
+    processed_notebook: str
+
+    @property
+    def result_payload(self) -> bytes:
+        return json.dumps({"result": self.processed_notebook}).encode("utf-8")
+
+
 async def connect_client_with_retry(nats_url: str, num_retries: int = 5):
     for i in range(num_retries):
         try:
@@ -40,9 +50,8 @@ async def connect_client_with_retry(nats_url: str, num_retries: int = 5):
     raise OSError("Could not connect to NATS")
 
 
-async def process_payload(payload: NotebookPayload):
-    logger.debug(f"Processing notebook payload for '{payload.reply_stream}'")
-
+async def process_payload(payload: NotebookPayload) -> ProcessingResult:
+    logger.debug(f"Processing notebook payload for '{payload.reply_subject}'")
     output_spec = create_output_spec(
         output_type=payload.output_type,
         prog_lang=payload.prog_lang,
@@ -51,33 +60,44 @@ async def process_payload(payload: NotebookPayload):
     )
     logger.debug("Output spec created")
     processor = NotebookProcessor(output_spec)
-    result = await processor.process_notebook(payload)
-    logger.debug(f"Processed notebook: {result[:100]}")
-    return result
+    processed_notebook = await processor.process_notebook(payload)
+    logger.debug(f"Processed notebook: {processed_notebook[:100]}")
+    return ProcessingResult(processed_notebook)
 
 
-def try_to_process_notebook_payload(data):
+async def process_message(message: Msg, client: nats.NATS) -> None:
     try:
-        payload = NotebookPayload(**data)
-        return process_payload(payload)
+        payload = handle_incoming_message(message)
+        # await asyncio.create_task(process_and_publish(payload, client))
+        await process_and_publish(payload, client)
     except Exception as e:
-        logger.exception("Error processing notebook: %s", e)
+        logger.exception("Error handling incoming message: %s", e)
+
+
+
+def handle_incoming_message(message):
+    try:
+        data = json.loads(message.data)
+        payload = NotebookPayload(**data)
+        logger.debug(f"Received JSON data: {data}"[:60])
+        # await message.respond(json.dumps({"reply": "OK"}).encode("utf-8"))
+        return payload
+    except Exception as e2:
+        logger.exception("Error handling incoming message: %s", e2)
+        # response1 = json.dumps({"error": str(e2)})
+        # await message.respond(response1.encode("utf-8"))
         raise
 
 
-async def process_message(message: Msg) -> None:
+async def process_and_publish(payload: NotebookPayload, client: nats.NATS):
     try:
-        data = json.loads(message.data)
-        logger.debug(f"Received JSON data: {data}"[:100])
-        result = await try_to_process_notebook_payload(data)
-        logger.debug(f"Result: {result[:100]}")
-        response = json.dumps({"result": str(result)})
-        await message.respond(response.encode("utf-8"))
-    except json.decoder.JSONDecodeError as e:
-        logger.exception("JSON decode error: %s", e)
+        result = await process_payload(payload)
+        logger.debug(f"Result: {result.processed_notebook[:60]}")
+        await client.publish(payload.reply_subject, result.result_payload)
     except Exception as e:
+        logger.exception("Error processing notebook: %s", e)
         response = json.dumps({"error": str(e)})
-        await message.respond(response.encode("utf-8"))
+        await client.publish(payload.reply_subject, response.encode("utf-8"))
 
 
 async def main():
@@ -85,12 +105,11 @@ async def main():
     subscriber = await client.subscribe("nb.process", queue=QUEUE_GROUP)
     try:
         async for message in subscriber.messages:
-            try:
-                await process_message(message)
-            except Exception as e:
-                logger.exception("Error while processing message: %s", e)
+            await process_message(message, client)
+            # await asyncio.sleep(0.1)  # Short delay before processing the next message
     finally:
         await client.close()
+
 
 
 if __name__ == "__main__":

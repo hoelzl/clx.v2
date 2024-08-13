@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import cast
 
@@ -23,7 +24,7 @@ DATA_FILE = "data/test.data"
 NOTEBOOK_FILE = "slides_some_topic_from_test_1.py"
 
 
-def test_file_from_path_plant_uml(course_1, section_1, topic_1):
+def test_file_from_path_plant_uml(course_1, section_1, topic_1, caplog):
     file_path = topic_1.path / PLANT_UML_FILE
     expected_output = file_path.parents[1] / "img/my_diag.png"
 

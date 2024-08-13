@@ -279,7 +279,7 @@ class Course:
             for topic_path in module.iterdir():
                 topic_id = simplify_ordered_name(topic_path.name)
                 if not topic_id:
-                    logger.warning(f"Skipping topic with no id: {topic_path}")
+                    logger.debug(f"Skipping topic with no id: {topic_path}")
                     continue
                 if existing_topic_path := self._topic_path_map.get(topic_id):
                     logger.warning(

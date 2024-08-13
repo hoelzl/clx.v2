@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -9,6 +10,7 @@ from tests.conftest import DATA_DIR, OUTPUT_DIR
 
 def test_build_topic_map(course_1_spec):
     course = Course(course_1_spec, DATA_DIR, OUTPUT_DIR)
+
     course._build_topic_map()
     assert len(course._topic_path_map) == 4
 
@@ -151,7 +153,7 @@ def test_course_notebooks(course_1_spec):
     assert nb3.number_in_section == 1
 
 
-def test_add_file_to_course(course_1_spec):
+def test_add_file_to_course(course_1_spec, caplog):
     unit = Course.from_spec(course_1_spec, DATA_DIR, OUTPUT_DIR)
     assert len(unit.files) == 9
     topic_1 = unit.topics[0]
@@ -176,11 +178,13 @@ def test_add_file_to_course(course_1_spec):
     assert len(unit.files) == 11
     assert unit.find_file(file_2).path == file_2
 
-    unit.add_file(file_3)
+    with caplog.at_level(logging.CRITICAL):
+        unit.add_file(file_3)
     assert len(unit.files) == 11
     assert unit.find_file(file_3) is None
 
-    unit.add_file(file_4)
+    with caplog.at_level(logging.CRITICAL):
+        unit.add_file(file_4)
     assert len(unit.files) == 11
     assert unit.find_file(file_4) is None
 

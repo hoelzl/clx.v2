@@ -2,7 +2,7 @@ import asyncio
 from abc import ABC, abstractmethod
 from typing import Any, Iterable
 
-from attrs import field, frozen
+from attrs import define, field, frozen
 
 
 @frozen
