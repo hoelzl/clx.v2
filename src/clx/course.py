@@ -4,7 +4,6 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import nats
 from attrs import Factory, define, frozen
 
 from clx.course_file import CourseFile, Notebook
@@ -178,43 +177,43 @@ class Course:
     def notebooks(self) -> list[Notebook]:
         return [file for file in self.files if isinstance(file, Notebook)]
 
-    async def on_file_moved(self, nc: nats.NATS, src_path: Path, dest_path: Path):
+    async def on_file_moved(self, src_path: Path, dest_path: Path):
         logger.debug(f"On file moved: {src_path} -> {dest_path}")
-        await self.on_file_deleted(nc, src_path)
-        await self.on_file_created(nc, dest_path)
+        await self.on_file_deleted(src_path)
+        await self.on_file_created(dest_path)
 
-    async def on_file_deleted(self, nc: nats.NATS, file_to_delete: Path):
+    async def on_file_deleted(self, file_to_delete: Path):
         logger.info(f"On file deleted: {file_to_delete}")
         file = self.find_course_file(file_to_delete)
         if not file:
             logger.debug(f"File not / no longer in course: {file_to_delete}")
             return
-        await file.delete(nc)
+        await file.delete()
 
-    async def on_file_created(self, nc: nats.NATS, path: Path):
+    async def on_file_created(self, path: Path):
         logger.debug(f"On file created: {path}")
         topic = self.add_file(path, warn_if_no_topic=False)
         if topic is not None:
-            await self.process_file(nc, path)
+            await self.process_file(path)
         else:
             logger.debug(f"File not in course: {path}")
 
-    async def on_file_modified(self, nc: nats.NATS, path: Path):
+    async def on_file_modified(self, path: Path):
         logger.info(f"On file modified: {path}")
         if self.find_course_file(path):
-            await self.process_file(nc, path)
+            await self.process_file(path)
 
-    async def process_file(self, nc: nats.NATS, path: Path):
+    async def process_file(self, path: Path):
         logging.info(f"Processing changed file {path}")
         file = self.find_course_file(path)
         if not file:
             logger.warning(f"Cannot process file: not in course: {path}")
             return
-        op = await file.get_processing_operation(nc, self.output_root)
+        op = await file.get_processing_operation(self.output_root)
         await op.exec()
         logger.debug(f"Processed file {path}")
 
-    async def process_all(self, nc):
+    async def process_all(self):
         logger.info(f"Processing all files for {self.course_root}")
         for stage in execution_stages():
             logger.debug(f"Processing stage {stage}")
@@ -223,7 +222,7 @@ class Course:
                 if file.execution_stage == stage:
                     logger.debug(f"Processing file {file.path}")
                     operations.append(
-                        await file.get_processing_operation(nc, self.output_root)
+                        await file.get_processing_operation(self.output_root)
                     )
             for dict_group in self.dict_groups:
                 logger.debug(f"Processing dict group {dict_group.name}")

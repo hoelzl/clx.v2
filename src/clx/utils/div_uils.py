@@ -22,9 +22,9 @@ def execution_stages() -> list[int]:
 class File:
     path: Path
 
-    async def get_processing_operation(self, nc, target_dir: Path) -> "Operation":
+    async def get_processing_operation(self, target_dir: Path) -> "Operation":
         from clx.operation import NoOperation
         return NoOperation()
 
-    async def delete(self, nc) -> None:
+    async def delete(self) -> None:
         self.path.unlink()

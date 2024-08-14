@@ -33,7 +33,7 @@ async def test_file_from_path_plant_uml_operations(course_1, topic_1, nc):
 
     unit = CourseFile.from_path(course_1, file_path, topic_1)
 
-    process_op = await unit.get_processing_operation(nc, course_1.output_root)
+    process_op = await unit.get_processing_operation(course_1.output_root)
     assert isinstance(process_op, ConvertPlantUmlFile)
     assert process_op.input_file == unit
     assert process_op.output_file == topic_1.path / "img/my_diag.png"
@@ -59,7 +59,7 @@ async def test_file_from_path_drawio_operations(course_1, topic_1, nc):
 
     unit = CourseFile.from_path(course_1, file_path, topic_1)
 
-    process_op = await unit.get_processing_operation(nc, course_1.output_root)
+    process_op = await unit.get_processing_operation(course_1.output_root)
     assert isinstance(process_op, ConvertDrawIoFile)
     assert process_op.input_file == unit
     assert process_op.output_file == topic_1.path / "img/my_drawing.png"
@@ -84,7 +84,7 @@ async def test_file_from_path_data_file_operations(course_1, topic_1, nc):
 
     unit = CourseFile.from_path(course_1, file_path, topic_1)
 
-    process_op = await unit.get_processing_operation(nc, course_1.output_root)
+    process_op = await unit.get_processing_operation(course_1.output_root)
     assert isinstance(process_op, Concurrently)
 
     ops = cast(list[CopyFileOperation], list(process_op.operations))
@@ -120,7 +120,7 @@ async def test_file_from_path_notebook_operations(course_1, topic_1, nc):
 
     unit = CourseFile.from_path(course_1, file_path, topic_1)
 
-    process_op = await unit.get_processing_operation(nc, course_1.output_root)
+    process_op = await unit.get_processing_operation(course_1.output_root)
     assert isinstance(process_op, Concurrently)
 
     ops = cast(list[ProcessNotebookOperation], list(process_op.operations))
@@ -147,7 +147,7 @@ async def test_data_file_generated_outputs(course_1, topic_1, nc):
     unit = CourseFile.from_path(course_1, file_path, topic_1)
 
     output_dir = course_1.output_root
-    op = await unit.get_processing_operation(nc, output_dir)
+    op = await unit.get_processing_operation(output_dir)
     await op.exec()
 
     assert unit.generated_sources == frozenset()
