@@ -3,12 +3,14 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import nats
 from attrs import define, field
 
 from clx.file_ops import (ConvertDrawIoFile, ConvertPlantUmlFile, CopyFileOperation,
                           ProcessNotebookOperation, )
 from clx.operation import Concurrently, NoOperation, Operation
 from clx.utils.div_uils import FIRST_EXECUTION_STAGE, File, LAST_EXECUTION_STAGE
+from clx.utils.nats_utils import NATS_URL
 from clx.utils.notebook_utils import find_notebook_titles
 from clx.utils.path_utils import (PLANTUML_EXTENSIONS, ext_for, extension_to_prog_lang,
                                   is_slides_file, output_specs, )
@@ -81,7 +83,6 @@ class PlantUmlFile(CourseFile):
         return ConvertPlantUmlFile(
             input_file=self,
             output_file=self.img_path,
-            nats_connection=nc,
         )
 
     @property
@@ -99,7 +100,6 @@ class DrawIoFile(CourseFile):
         return ConvertDrawIoFile(
             input_file=self,
             output_file=self.img_path,
-            nats_connection=nc,
         )
 
     @property
@@ -151,7 +151,6 @@ class Notebook(CourseFile):
                 format=format_,
                 mode=mode,
                 prog_lang=self.prog_lang,
-                nats_connection=nc,
             )
             for lang, format_, mode, output_dir in output_specs(self.course, target_dir)
         )

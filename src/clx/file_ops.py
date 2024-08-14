@@ -13,11 +13,11 @@ from clx.operation import Operation
 from clx.utils.nats_utils import process_image_request
 from clx.utils.path_utils import is_image_file, is_image_source_file
 from clx.utils.text_utils import sanitize_subject_name, unescape
+from nb.nats_server import NATS_URL
 
 if TYPE_CHECKING:
     from clx.course import DictGroup
-    from clx.course_file import DataFile, CourseFile, Notebook, PlantUmlFile
-
+    from clx.course_file import DataFile, CourseFile, Notebook
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +35,8 @@ class DeleteFileOperation(Operation):
 
 @frozen
 class ConvertFileOperation(Operation, ABC):
-    input_file: "PlantUmlFile"
+    input_file: "CourseFile"
     output_file: Path
-    nats_connection: nats.NATS
 
 
 @frozen
@@ -47,9 +46,7 @@ class ConvertPlantUmlFile(ConvertFileOperation):
             f"Converting PlantUML file {self.input_file.relative_path} "
             f"to {self.output_file}"
         )
-        await process_image_request(
-            self.nats_connection, self, "PlantUML", "plantuml.process"
-        )
+        await process_image_request(self, "PlantUML", "plantuml.process")
         self.input_file.generated_outputs.add(self.output_file)
 
 
@@ -61,9 +58,7 @@ class ConvertDrawIoFile(ConvertFileOperation):
             f"to {self.output_file}"
         )
         # await self.process_request()
-        await process_image_request(
-            self.nats_connection, self, "DrawIO", "drawio.process"
-        )
+        await process_image_request(self, "DrawIO", "drawio.process")
         self.input_file.generated_outputs.add(self.output_file)
 
 
@@ -99,7 +94,6 @@ class CopyDictGroupOperation(Operation):
         ]
         await asyncio.gather(*tasks)
 
-
 @frozen
 class ProcessNotebookOperation(Operation):
     input_file: "Notebook"
@@ -108,7 +102,6 @@ class ProcessNotebookOperation(Operation):
     format: str
     mode: str
     prog_lang: str
-    nats_connection: nats.NATS
 
     @property
     def reply_subject(self) -> str:
@@ -131,20 +124,24 @@ class ProcessNotebookOperation(Operation):
     async def process_request(self):
         try:
             logger.debug(f"Processing {self.input_file.relative_path} ")
-            sub = await self.subscribe_to_reply_subject()
+            nc = await nats.connect(NATS_URL)
+            await nc.flush()
+            sub = await self.subscribe_to_reply_subject(nc)
             try:
-                await self.send_nb_process_msg()
+                await self.send_nb_process_msg(nc)
                 await self.wait_for_processed_notebook(sub)
             finally:
-                await sub.drain()
+                await nc.drain()
+                await nc.close()
         except Exception as e:
             logger.exception(
                 "Notebook-Processor: Error while processing request: " "%s", e
             )
 
-    async def subscribe_to_reply_subject(self):
+    async def subscribe_to_reply_subject(self, nc):
         try:
-            sub = await self.nats_connection.subscribe(self.reply_subject)
+            sub = await nc.subscribe(self.reply_subject)
+            await nc.flush()
         except Exception as e:
             logger.exception(
                 "Error while subscribing to reply subject '%s': '%s'",
@@ -154,11 +151,11 @@ class ProcessNotebookOperation(Operation):
             raise
         return sub
 
-    async def send_nb_process_msg(self):
+    async def send_nb_process_msg(self, nc):
         payload = self.build_payload()
         logger.debug(f"Notebook-Processor: sending request: {payload}")
         try:
-            await self.nats_connection.publish(
+            await nc.publish(
                 "nb.process", json.dumps(payload).encode()
             )
         except Exception as e:

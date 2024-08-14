@@ -43,7 +43,7 @@ services:
                 condition: service_started
         environment:
             - NATS_URL=nats://nats:4222
-            - LOG_LEVEL=DEBUG
+            - LOG_LEVEL=INFO
             - DISPLAY=:99
         networks:
             - app-network
@@ -66,7 +66,7 @@ services:
                 condition: service_started
         environment:
             - NATS_URL=nats://nats:4222
-            - LOG_LEVEL=DEBUG
+            - LOG_LEVEL=INFO
         networks:
             - app-network
         develop:

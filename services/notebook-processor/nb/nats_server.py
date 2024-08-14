@@ -12,7 +12,7 @@ from .notebook_processor import NotebookProcessor
 from .output_spec import create_output_spec
 
 NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
-QUEUE_GROUP = os.environ.get("QUEUE_GROUP", "NOTEBOOK_PROCESSOR")
+QUEUE_GROUP = os.environ.get("NOTEBOOK_PROCESSOR_QUEUE_GROUP", "NOTEBOOK_PROCESSOR")
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 LOG_CELL_PROCESSING = os.environ.get("LOG_CELL_PROCESSING", "False") == "True"

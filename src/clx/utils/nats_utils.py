@@ -15,10 +15,13 @@ if TYPE_CHECKING:
 NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
 logger = logging.getLogger(__name__)
 
+reply_counter = 0
+
 
 async def process_image_request(
-    nc, op: "ConvertFileOperation", service: str, nats_subject: str
+    op: "ConvertFileOperation", service: str, nats_subject: str
 ):
+    nc = await nats.connect(NATS_URL)
     try:
         reply_subject = _reply_subject_for_operation(op)
         sub = await _subscribe_to_nats_subject(nc, reply_subject)
@@ -27,8 +30,10 @@ async def process_image_request(
             "reply_subject": reply_subject,
             "output_format": "png",
         }
-        logger.debug(f"{service}: Sending Request to {nats_subject} with reply "
-                     f"subject {reply_subject}")
+        logger.debug(
+            f"{service}: Sending Request to {nats_subject} with reply "
+            f"subject {reply_subject}"
+        )
         await nc.publish(nats_subject, json.dumps(payload).encode())
         msg = await _wait_for_processed_image_msg(service, sub)
         logger.debug(f"{service}: Received reply: {msg.data[:40]}")
@@ -43,10 +48,17 @@ async def process_image_request(
                 op.output_file.write_bytes(img)
     except Exception as e:
         logger.exception("%s: Error %s", service, e)
+    finally:
+        await nc.drain()
+        await nc.close()
 
 
 def _reply_subject_for_operation(file: "ConvertFileOperation"):
-    return sanitize_subject_name(f"img.completed.{file.input_file.relative_path}")
+    global reply_counter
+    reply_counter += 1
+    return sanitize_subject_name(
+        f"img.completed.{file.input_file.relative_path}_{reply_counter}"
+    )
 
 
 async def _subscribe_to_nats_subject(nc: nats.NATS, nats_subject: str):

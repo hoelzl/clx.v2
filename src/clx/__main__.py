@@ -83,7 +83,7 @@ async def error_cb(e):
         print(f'Error connecting to NATS: {type(e)}, {e}')
 
 async def main(spec_file, data_dir, output_dir, watch):
-    setup_logging(logging.DEBUG)
+    setup_logging(logging.INFO)
     logger.debug(f"Connecting to NATS server {NATS_URL}")
     nc = await nats.connect(NATS_URL, error_cb=error_cb)
     try:

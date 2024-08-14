@@ -11,7 +11,7 @@ import nats
 
 # Configuration
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
-QUEUE_GROUP = os.environ.get("QUEUE_GROUP", "PLANTUML_CONVERTER")
+QUEUE_GROUP = os.environ.get("PLANTUML_CONVERTER_QUEUE_GROUP", "PLANTUML_CONVERTER")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG").upper()
 
 # Set up logging

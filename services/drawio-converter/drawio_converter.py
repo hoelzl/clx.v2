@@ -11,7 +11,7 @@ import nats
 
 # Configuration
 NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
-QUEUE_GROUP = os.environ.get("QUEUE_GROUP", "DRAWIO_CONVERTER")
+QUEUE_GROUP = os.environ.get("DRAWIO_CONVERTER_QUEUE_GROUP", "DRAWIO_CONVERTER")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG").upper()
 
 # Set up logging
