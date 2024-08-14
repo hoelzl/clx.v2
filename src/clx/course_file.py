@@ -1,27 +1,18 @@
 import asyncio
 import logging
 from pathlib import Path
-from typing import Coroutine, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from attrs import define, field
 
-from clx.file_ops import (
-    ConvertDrawIoFile,
-    ConvertPlantUmlFile,
-    CopyFileOperation,
-    ProcessNotebookOperation,
-)
+from clx.file_ops import (ConvertDrawIoFile, ConvertPlantUmlFile, CopyFileOperation,
+                          ProcessNotebookOperation, )
 from clx.operation import Concurrently, NoOperation, Operation
 from clx.utils.div_uils import FIRST_EXECUTION_STAGE, File, LAST_EXECUTION_STAGE
 from clx.utils.notebook_utils import find_notebook_titles
-from clx.utils.path_utils import (
-    PLANTUML_EXTENSIONS,
-    ext_for,
-    extension_to_prog_lang,
-    is_slides_file,
-    output_specs,
-)
-from clx.utils.text_utils import Text, as_dir_name
+from clx.utils.path_utils import (PLANTUML_EXTENSIONS, ext_for, extension_to_prog_lang,
+                                  is_slides_file, output_specs, )
+from clx.utils.text_utils import Text
 
 if TYPE_CHECKING:
     from clx.course import Course, Section
@@ -72,13 +63,13 @@ class CourseFile(File):
     def generated_sources(self) -> frozenset[Path]:
         return frozenset()
 
-    async def get_processing_operation(self, _target_dir: Path) -> Operation:
+    async def get_processing_operation(self, nc, target_dir: Path) -> Operation:
         return NoOperation()
 
-    async def delete(self) -> None:
+    async def delete(self, nc) -> None:
         course_actions = []
         for go in self.generated_outputs:
-            course_actions.append(self.course.on_file_deleted(go))
+            course_actions.append(self.course.on_file_deleted(nc, go))
             go.unlink(missing_ok=True)
         self.generated_outputs.clear()
         await asyncio.gather(*course_actions, return_exceptions=True)
@@ -86,11 +77,11 @@ class CourseFile(File):
 
 @define
 class PlantUmlFile(CourseFile):
-    async def get_processing_operation(self, _target_dir: Path) -> Operation:
+    async def get_processing_operation(self, nc, target_dir: Path) -> Operation:
         return ConvertPlantUmlFile(
             input_file=self,
             output_file=self.img_path,
-            nats_connection=await self.course.nats_connection(),
+            nats_connection=nc,
         )
 
     @property
@@ -104,11 +95,11 @@ class PlantUmlFile(CourseFile):
 
 @define
 class DrawIoFile(CourseFile):
-    async def get_processing_operation(self, _target_dir: Path) -> Operation:
+    async def get_processing_operation(self, nc, target_dir: Path) -> Operation:
         return ConvertDrawIoFile(
             input_file=self,
             output_file=self.img_path,
-            nats_connection=await self.course.nats_connection(),
+            nats_connection=nc,
         )
 
     @property
@@ -127,7 +118,7 @@ class DataFile(CourseFile):
     def execution_stage(self) -> int:
         return LAST_EXECUTION_STAGE
 
-    async def get_processing_operation(self, target_dir: Path) -> Operation:
+    async def get_processing_operation(self, nc, target_dir: Path) -> Operation:
         return Concurrently(
             CopyFileOperation(
                 input_file=self,
@@ -148,8 +139,7 @@ class Notebook(CourseFile):
         title = find_notebook_titles(text, default=file.stem)
         return cls(course=course, path=file, topic=topic, title=title)
 
-    async def get_processing_operation(self, target_dir: Path) -> Operation:
-        nc = await self.course.nats_connection()
+    async def get_processing_operation(self, nc, target_dir: Path) -> Operation:
         return Concurrently(
             ProcessNotebookOperation(
                 input_file=self,

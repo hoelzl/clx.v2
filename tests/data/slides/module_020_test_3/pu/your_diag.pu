@@ -1,6 +1,6 @@
 @startuml
 
-class "MyClass" {
+class "YourClass" {
     -field: int
     +method1(): str
     +method2(): bool

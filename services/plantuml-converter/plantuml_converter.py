@@ -25,7 +25,19 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PlantUmlPayload:
     data: str
+    reply_subject: str
     output_format: str = "png"
+
+
+async def extract_payload(msg):
+    try:
+        data = json.loads(msg.data)
+        logger.debug(f"Received JSON data: {data}")
+        payload = PlantUmlPayload(**data)
+        return payload
+    except json.JSONDecodeError as e:
+        logger.exception("JSON decode error: %s", e)
+        raise
 
 
 class PlantUmlConverter:
@@ -49,34 +61,25 @@ class PlantUmlConverter:
             cb=self.handle_event,
             queue=queue,
         )
+        await self.nats_client.flush()
         logger.info(f"Subscribed to subject: {subject} on queue group {queue}")
 
     async def handle_event(self, msg):
+        payload = await extract_payload(msg)
         try:
-            data = json.loads(msg.data)
-            logger.debug(f"Received JSON data: {data}")
-            result = await self.try_to_process_payload(data)
+            result = await self.process_plantuml_file(payload)
+            logger.debug(f"Raw result: {len(result)} bytes")
             encoded_result = b64encode(result)
-            logger.debug(f"Result: {encoded_result[:20]}")
+            logger.debug(f"Result: {len(result)} bytes: {encoded_result[:20]}")
             response = json.dumps({"result": encoded_result.decode("utf-8")})
-            await msg.respond(response.encode("utf-8"))
-        except json.JSONDecodeError as e:
-            logger.exception("JSON decode error: %s", e)
-            await msg.respond(
-                json.dumps({"error": f"JSON decode error {e}"}).encode("utf-8")
+            await self.nats_client.publish(
+                payload.reply_subject, response.encode("utf-8")
             )
         except Exception as e:
             logger.exception("Error while handling event: %s", e)
-            await msg.respond(json.dumps({"error": str(e)}).encode("utf-8"))
-
-    async def try_to_process_payload(self, data):
-        try:
-            logger.debug(f"Processing payload: {data}")
-            payload = PlantUmlPayload(**data)
-            return await self.process_plantuml_file(payload)
-        except TypeError as e:
-            logger.error("Error while processing payload: %s", e)
-            raise
+            await self.nats_client.publish(
+                payload.reply_subject, json.dumps({"error": str(e)}).encode("utf-8")
+            )
 
     async def process_plantuml_file(self, data: PlantUmlPayload) -> bytes:
         logger.debug(f"Processing PlantUML file: {data}")

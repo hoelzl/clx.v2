@@ -7,19 +7,13 @@ from typing import TYPE_CHECKING
 import nats
 from attrs import Factory, define, frozen
 
-from clx.course_spec import CourseSpec, DictGroupSpec
 from clx.course_file import CourseFile, Notebook
+from clx.course_spec import CourseSpec, DictGroupSpec
 from clx.topic import Topic
 from clx.utils.div_uils import File, execution_stages
-from clx.utils.nats_utils import NATS_URL, connect_client_with_retry
-from clx.utils.path_utils import (
-    SKIP_DIRS_FOR_OUTPUT,
-    SKIP_DIRS_PATTERNS,
-    is_ignored_dir_for_course,
-    is_in_dir,
-    output_path_for,
-    simplify_ordered_name,
-)
+from clx.utils.path_utils import (SKIP_DIRS_FOR_OUTPUT, SKIP_DIRS_PATTERNS,
+                                  is_ignored_dir_for_course, is_in_dir, output_path_for,
+                                  simplify_ordered_name, )
 from clx.utils.text_utils import Text
 
 if TYPE_CHECKING:
@@ -86,13 +80,13 @@ class DictGroup:
         )
 
     def copy_to_output(self, is_speaker, lang: str):
-        logger.debug(f"Copying {self.name} to output for {lang}")
+        logger.debug(f"Copying '{self.name[lang]}' to output for {lang}")
         for source_dir, relative_path in zip(self.source_dirs, self.relative_paths):
             if not source_dir.exists():
                 logger.error(f"Source directory does not exist: {source_dir}")
                 continue
             output_dir = self.output_path(is_speaker, lang) / relative_path
-            logger.debug(f"Copying {source_dir} to {output_dir}")
+            logger.debug(f"Copying '{source_dir}' to {output_dir}")
             output_dir.mkdir(parents=True, exist_ok=True)
             shutil.copytree(
                 source_dir,
@@ -102,6 +96,9 @@ class DictGroup:
                     *SKIP_DIRS_FOR_OUTPUT, *SKIP_DIRS_PATTERNS
                 ),
             )
+            logger.debug(f"Listing output dir:")
+            dirs = "\n".join(str(path) for path in output_dir.glob("*"))
+            logger.debug(f"Output dir: {dirs}")
 
     async def get_processing_operation(self) -> "Operation":
         from clx.operation import Concurrently
@@ -123,7 +120,6 @@ class Course:
     sections: list[Section] = Factory(list)
     dict_groups: list[DictGroup] = Factory(list)
     _topic_path_map: dict[str, Path] = Factory(dict)
-    _nats_connection: nats.NATS | None = None
 
     @classmethod
     def from_spec(
@@ -182,48 +178,43 @@ class Course:
     def notebooks(self) -> list[Notebook]:
         return [file for file in self.files if isinstance(file, Notebook)]
 
-    async def nats_connection(self):
-        if not self._nats_connection:
-            self._nats_connection = await connect_client_with_retry(NATS_URL)
-        return self._nats_connection
-
-    async def on_file_moved(self, src_path: Path, dest_path: Path):
+    async def on_file_moved(self, nc: nats.NATS, src_path: Path, dest_path: Path):
         logger.debug(f"On file moved: {src_path} -> {dest_path}")
-        await self.on_file_deleted(src_path)
-        await self.on_file_created(dest_path)
+        await self.on_file_deleted(nc, src_path)
+        await self.on_file_created(nc, dest_path)
 
-    async def on_file_created(self, path: Path):
-        logger.debug(f"On file created: {path}")
-        topic = self.add_file(path, warn_if_no_topic=False)
-        if topic is not None:
-            await self.process_file(path)
-        else:
-            logger.debug(f"File not in course: {path}")
-
-    async def on_file_deleted(self, file_to_delete: Path):
+    async def on_file_deleted(self, nc: nats.NATS, file_to_delete: Path):
         logger.info(f"On file deleted: {file_to_delete}")
         file = self.find_course_file(file_to_delete)
         if not file:
             logger.debug(f"File not / no longer in course: {file_to_delete}")
             return
-        await file.delete()
+        await file.delete(nc)
 
-    async def on_file_modified(self, path: Path):
+    async def on_file_created(self, nc: nats.NATS, path: Path):
+        logger.debug(f"On file created: {path}")
+        topic = self.add_file(path, warn_if_no_topic=False)
+        if topic is not None:
+            await self.process_file(nc, path)
+        else:
+            logger.debug(f"File not in course: {path}")
+
+    async def on_file_modified(self, nc: nats.NATS, path: Path):
         logger.info(f"On file modified: {path}")
         if self.find_course_file(path):
-            await self.process_file(path)
+            await self.process_file(nc, path)
 
-    async def process_file(self, path: Path):
+    async def process_file(self, nc: nats.NATS, path: Path):
         logging.info(f"Processing changed file {path}")
         file = self.find_course_file(path)
         if not file:
             logger.warning(f"Cannot process file: not in course: {path}")
             return
-        op = await file.get_processing_operation(self.output_root)
+        op = await file.get_processing_operation(nc, self.output_root)
         await op.exec()
         logger.debug(f"Processed file {path}")
 
-    async def process_all(self):
+    async def process_all(self, nc):
         logger.info(f"Processing all files for {self.course_root}")
         for stage in execution_stages():
             logger.debug(f"Processing stage {stage}")
@@ -232,7 +223,7 @@ class Course:
                 if file.execution_stage == stage:
                     logger.debug(f"Processing file {file.path}")
                     operations.append(
-                        await file.get_processing_operation(self.output_root)
+                        await file.get_processing_operation(nc, self.output_root)
                     )
             for dict_group in self.dict_groups:
                 logger.debug(f"Processing dict group {dict_group.name}")

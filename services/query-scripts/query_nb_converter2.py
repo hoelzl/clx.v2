@@ -1,7 +1,8 @@
 import asyncio
 
-from nb.notebook_processor import NotebookProcessor, OutputSpec
+from nb.notebook_processor import NotebookProcessor
 from nb.output_spec import CompletedOutput
+from nb.payload import NotebookPayload
 
 
 async def test_notebook_processor():
@@ -11,7 +12,17 @@ async def test_notebook_processor():
         notebook_format="html",
     )
     nbp = NotebookProcessor(output_spec)
-    result = await nbp.process_notebook("# %%\nprint('Hello, world!')")
+    payload = NotebookPayload(
+        notebook_text="# %%\nprint('Hello, world!')",
+        notebook_path="test_notebook.py",
+        reply_subject="nb.completed.test_notebook_1",
+        prog_lang="python",
+        language="en",
+        notebook_format="html",
+        output_type="completed",
+        other_files={}
+    )
+    result = await nbp.process_notebook(payload)
     print(result["result"])
 
 

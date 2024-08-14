@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import os
-from base64 import b64decode, b64encode
+from base64 import b64encode
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -12,11 +12,11 @@ import nats
 # Configuration
 NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
 QUEUE_GROUP = os.environ.get("QUEUE_GROUP", "DRAWIO_CONVERTER")
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG").upper()
 
 # Set up logging
-log_level = os.environ.get("LOG_LEVEL", "DEBUG").upper()
 logging.basicConfig(
-    level=getattr(logging, log_level),
+    level=getattr(logging, LOG_LEVEL),
     format="%(asctime)s - drawio-converter - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
@@ -25,7 +25,19 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DrawioPayload:
     data: str
+    reply_subject: str
     output_format: str = "png"
+
+
+async def extract_payload(msg):
+    try:
+        data = json.loads(msg.data)
+        logger.debug(f"Received JSON data: {data}")
+        payload = DrawioPayload(**data)
+        return payload
+    except json.JSONDecodeError as e:
+        logger.exception("JSON decode error: %s", e)
+        raise
 
 
 class DrawioConverter:
@@ -49,33 +61,25 @@ class DrawioConverter:
             cb=self.handle_event,
             queue=queue,
         )
+        await self.nats_client.flush()
         logger.info(f"Subscribed to subject: {subject} on queue group {queue}")
 
     async def handle_event(self, msg):
+        payload = await extract_payload(msg)
         try:
-            data = json.loads(msg.data)
-            logger.debug(f"Received JSON data: {data}")
-            result = await self.try_to_process_payload(data)
+            result = await self.process_drawio_file(payload)
+            logger.debug(f"Raw result: {len(result)} bytes")
             encoded_result = b64encode(result)
-            logger.debug(f"Result: {encoded_result[:20]}")
+            logger.debug(f"Result: {len(result)} bytes: {encoded_result[:20]}")
             response = json.dumps({"result": encoded_result.decode("utf-8")})
-            await msg.respond(response.encode("utf-8"))
-        except json.JSONDecodeError as e:
-            logger.exception("JSON decode error: %s", e)
-            await msg.respond(
-                json.dumps({"error": f"JSON decode error {e}"}).encode("utf-8")
+            await self.nats_client.publish(
+                payload.reply_subject, response.encode("utf-8")
             )
         except Exception as e:
             logger.exception("Error while handling event: %s", e)
-            await msg.respond(json.dumps({"error": str(e)}).encode("utf-8"))
-
-    async def try_to_process_payload(self, data):
-        try:
-            payload = DrawioPayload(**data)
-            return await self.process_drawio_file(payload)
-        except TypeError as e:
-            logger.exception("Error while processing payload: %s", e)
-            raise
+            await self.nats_client.publish(
+                payload.reply_subject, json.dumps({"error": str(e)}).encode("utf-8")
+            )
 
     async def process_drawio_file(self, data: DrawioPayload) -> bytes:
         with TemporaryDirectory() as tmp_dir:
@@ -130,10 +134,9 @@ class DrawioConverter:
         logger.debug(f"stderr: {stderr.decode()}")
         if process.returncode == 0:
             logger.info(f"Converted {input_path} to {output_path}")
-
             # If the output is SVG, optimize it and embed the font
-            if output_format.lower() == "svg":
-                await DrawioConverter.optimize_svg(output_path)
+            # if output_format.lower() == "svg":
+            #     await DrawioConverter.optimize_svg(output_path)
         else:
             logger.error(f"Error converting {input_path}: {stderr.decode()}")
 

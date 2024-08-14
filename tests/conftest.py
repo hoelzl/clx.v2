@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ETree
 
+import nats
 import pytest
 
 from clx.utils.text_utils import Text
@@ -112,6 +113,11 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 
 
 @pytest.fixture
+def nc():
+    return nats.NATS()
+
+
+@pytest.fixture
 def course_1_xml():
     return ETree.fromstring(COURSE_1_XML)
 
@@ -141,8 +147,6 @@ def course_2_spec():
 def course_1(course_1_spec):
     from clx.course import Course
     course = Course(course_1_spec, DATA_DIR, Path("/output"))
-    # Fake NATS connection, so that we can get processing operations in tests
-    course._nats_connection = "Fake NATS connection"
     return course
 
 
@@ -150,8 +154,6 @@ def course_1(course_1_spec):
 def course_2(course_2_spec):
     from clx.course import Course
     course = Course(course_2_spec, DATA_DIR, Path("/output"))
-    # Fake NATS connection, so that we can get processing operations in tests
-    course._nats_connection = "Fake NATS connection"
     return course
 
 

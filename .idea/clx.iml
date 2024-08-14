@@ -6,7 +6,9 @@
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/services/drawio-converter" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/services/plantuml-converter" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tests/data/slides/module_020_test_3" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/src/clx.egg-info" />
+      <excludeFolder url="file://$MODULE_DIR$/tests/data/output" />
     </content>
     <orderEntry type="jdk" jdkName="clx" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

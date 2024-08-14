@@ -1,8 +1,7 @@
 import asyncio
-import io
 import json
 import os
-from base64 import b64decode, b64encode
+from base64 import b64decode
 from pprint import pprint
 from tempfile import NamedTemporaryFile
 
@@ -380,7 +379,7 @@ payload = {
 
 async def test_drawio_processor():
     nc = await nats.connect(NATS_URL)
-    reply = await nc.request("drawio.process", json.dumps(payload).encode(), timeout=60)
+    reply = await nc.request("drawio.process", json.dumps(payload).encode(), timeout=5)
     result = json.loads(reply.data.decode())
     if isinstance(result, dict):
         if png_base64 := result.get("result").encode():

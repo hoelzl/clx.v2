@@ -2,25 +2,24 @@ import asyncio
 import json
 import logging
 import shutil
+from abc import ABC
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
 import nats
-from attrs import define, frozen
+from attrs import frozen
 
 from clx.operation import Operation
 from clx.utils.nats_utils import process_image_request
 from clx.utils.path_utils import is_image_file, is_image_source_file
-from clx.utils.text_utils import sanitize_stream_name, unescape
+from clx.utils.text_utils import sanitize_subject_name, unescape
 
 if TYPE_CHECKING:
     from clx.course import DictGroup
-    from clx.course_file import DataFile, DrawIoFile, CourseFile, Notebook, PlantUmlFile
+    from clx.course_file import DataFile, CourseFile, Notebook, PlantUmlFile
 
 
 logger = logging.getLogger(__name__)
-
-OP_DURATION = 0.01
 
 
 @frozen
@@ -35,41 +34,37 @@ class DeleteFileOperation(Operation):
 
 
 @frozen
-class ConvertPlantUmlFile(Operation):
+class ConvertFileOperation(Operation, ABC):
     input_file: "PlantUmlFile"
     output_file: Path
     nats_connection: nats.NATS
 
-    async def exec(self, *args, **kwargs) -> None:
+
+@frozen
+class ConvertPlantUmlFile(ConvertFileOperation):
+    async def exec(self, *_args, **_kwargs) -> None:
         logger.info(
             f"Converting PlantUML file {self.input_file.relative_path} "
             f"to {self.output_file}"
         )
-        await self.process_request()
-        self.input_file.generated_outputs.add(self.output_file)
-
-    async def process_request(self, timeout=240):
         await process_image_request(
-            self, "PlantUML", "plantuml.process", timeout=timeout
+            self.nats_connection, self, "PlantUML", "plantuml.process"
         )
+        self.input_file.generated_outputs.add(self.output_file)
 
 
 @frozen
-class ConvertDrawIoFile(Operation):
-    input_file: "DrawIoFile"
-    output_file: Path
-    nats_connection: nats.NATS
-
-    async def exec(self, *args, **kwargs) -> Any:
+class ConvertDrawIoFile(ConvertFileOperation):
+    async def exec(self, *_args, **_kwargs) -> Any:
         logger.info(
             f"Converting DrawIO file {self.input_file.relative_path} "
             f"to {self.output_file}"
         )
-        await self.process_request()
+        # await self.process_request()
+        await process_image_request(
+            self.nats_connection, self, "DrawIO", "drawio.process"
+        )
         self.input_file.generated_outputs.add(self.output_file)
-
-    async def process_request(self, timeout=120):
-        await process_image_request(self, "DrawIO", "drawio.process", timeout=timeout)
 
 
 @frozen
@@ -91,13 +86,18 @@ class CopyDictGroupOperation(Operation):
     lang: str
 
     async def exec(self, *args, **kwargs) -> Any:
-        logger.debug(f"Copying dict group {self.dict_group.name} for " f"{self.lang}")
-        for is_speaker in [True, False]:
-            logger.info(f"Copying {self.dict_group.output_path(is_speaker, self.lang)}")
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(
+        logger.debug(
+            f"Copying dict group '{self.dict_group.name[self.lang]}' "
+            f"for {self.lang}"
+        )
+        loop = asyncio.get_running_loop()
+        tasks = [
+            loop.run_in_executor(
                 None, self.dict_group.copy_to_output(is_speaker, self.lang)
             )
+            for is_speaker in [False, True]
+        ]
+        await asyncio.gather(*tasks)
 
 
 @frozen
@@ -117,8 +117,8 @@ class ProcessNotebookOperation(Operation):
         lang = self.lang
         format_ = self.format
         mode = self.mode
-        reply_topic = f"{id_}_{num}_{lang}_{format_}_{mode}"
-        return sanitize_stream_name(f"nb.completed.{reply_topic}")
+        reply_subject = f"{id_}_{num}_{lang}_{format_}_{mode}"
+        return sanitize_subject_name(f"nb.completed.{reply_subject}")
 
     async def exec(self, *args, **kwargs) -> Any:
         logger.info(
@@ -130,47 +130,44 @@ class ProcessNotebookOperation(Operation):
 
     async def process_request(self):
         try:
-            nc = self.nats_connection
             logger.debug(f"Processing {self.input_file.relative_path} ")
-            sub = await self.nats_connection.subscribe(self.reply_subject)
-            payload = await self.build_payload()
-            logger.debug(f"Notebook: sending request: {payload}")
-            await nc.publish("nb.process", json.dumps(payload).encode())
-            logger.debug(
-                f"Notebook: Waiting for processed notebook {self.reply_subject}"
-            )
-            await self.handle_message(sub)
-            logger.debug(f"Notebook: done with {self.reply_subject} ")
-            await sub.drain()
-        except Exception as e:
-            logger.exception("Notebook: Error while processing request: %s", e)
-
-    async def handle_message(self, sub):
-        while True:
+            sub = await self.subscribe_to_reply_subject()
             try:
-                msg = await sub.next_msg(timeout=1)
-                self.write_notebook_to_file(msg)
-                break
-            except asyncio.TimeoutError:
-                continue
+                await self.send_nb_process_msg()
+                await self.wait_for_processed_notebook(sub)
+            finally:
+                await sub.drain()
+        except Exception as e:
+            logger.exception(
+                "Notebook-Processor: Error while processing request: " "%s", e
+            )
 
-    def write_notebook_to_file(self, msg):
-        data = json.loads(msg.data.decode())
-        logger.debug(f"Notebook: Decoded message {str(data)[:50]}")
-        if isinstance(data, dict):
-            if notebook := data.get("result"):
-                logger.debug(f"Notebook: Writing notebook to {self.output_file}")
-                if not self.output_file.parent.exists():
-                    self.output_file.parent.mkdir(parents=True, exist_ok=True)
-                self.output_file.write_text(notebook)
-            elif error := data.get("error"):
-                logger.error(f"Notebook: Error: {error}")
-            else:
-                logger.error(f"Notebook: no key 'result' in {unescape(data)}")
-        else:
-            logger.error(f"Notebook: reply not a dict {unescape(data)}")
+    async def subscribe_to_reply_subject(self):
+        try:
+            sub = await self.nats_connection.subscribe(self.reply_subject)
+        except Exception as e:
+            logger.exception(
+                "Error while subscribing to reply subject '%s': '%s'",
+                self.reply_subject,
+                e,
+            )
+            raise
+        return sub
 
-    async def build_payload(self):
+    async def send_nb_process_msg(self):
+        payload = self.build_payload()
+        logger.debug(f"Notebook-Processor: sending request: {payload}")
+        try:
+            await self.nats_connection.publish(
+                "nb.process", json.dumps(payload).encode()
+            )
+        except Exception as e:
+            logger.exception(
+                "Error while publishing notebook '%s': '%s'", self.reply_subject, e
+            )
+            raise
+
+    def build_payload(self):
         notebook_path = self.input_file.relative_path.name
         return {
             "notebook_text": self.input_file.path.read_text(),
@@ -188,3 +185,34 @@ class ProcessNotebookOperation(Operation):
                 and not is_image_source_file(file.path)
             },
         }
+
+    async def wait_for_processed_notebook(self, sub):
+        logger.debug(
+            f"Notebook-Processor: Waiting for processed notebook {self.reply_subject}"
+        )
+        while True:
+            try:
+                msg = await sub.next_msg(timeout=1)
+                self.write_notebook_to_file(msg)
+                break
+            except asyncio.TimeoutError:
+                continue
+        logger.debug(f"Notebook-Processor: Done with {self.reply_subject} ")
+
+    def write_notebook_to_file(self, msg):
+        data = json.loads(msg.data.decode())
+        logger.debug(f"Notebook-Processor: Decoded message {str(data)[:50]}")
+        if isinstance(data, dict):
+            if notebook := data.get("result"):
+                logger.debug(
+                    f"Notebook-Processor: Writing notebook to {self.output_file}"
+                )
+                if not self.output_file.parent.exists():
+                    self.output_file.parent.mkdir(parents=True, exist_ok=True)
+                self.output_file.write_text(notebook)
+            elif error := data.get("error"):
+                logger.error(f"Notebook-Processor: Error: {error}")
+            else:
+                logger.error(f"Notebook-Processor: No key 'result' in {unescape(data)}")
+        else:
+            logger.error(f"Notebook-Processor: Reply not a dict {unescape(data)}")

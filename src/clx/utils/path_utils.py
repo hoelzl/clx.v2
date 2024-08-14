@@ -143,7 +143,7 @@ class Mode(StrEnum):
     SPEAKER = "speaker"
 
 
-def ext_for(format_: str | Format, prog_lang) -> str:
+def ext_for(format_: str | Format, _prog_lang) -> str:
     match str(format_):
         case "html":
             return ".html"

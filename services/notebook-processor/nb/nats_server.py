@@ -80,12 +80,9 @@ def handle_incoming_message(message):
         data = json.loads(message.data)
         payload = NotebookPayload(**data)
         logger.debug(f"Received JSON data: {data}"[:60])
-        # await message.respond(json.dumps({"reply": "OK"}).encode("utf-8"))
         return payload
     except Exception as e2:
         logger.exception("Error handling incoming message: %s", e2)
-        # response1 = json.dumps({"error": str(e2)})
-        # await message.respond(response1.encode("utf-8"))
         raise
 
 
@@ -103,6 +100,7 @@ async def process_and_publish(payload: NotebookPayload, client: nats.NATS):
 async def main():
     client = await connect_client_with_retry(NATS_URL)
     subscriber = await client.subscribe("nb.process", queue=QUEUE_GROUP)
+    await client.flush()
     try:
         async for message in subscriber.messages:
             await process_message(message, client)
