@@ -23,7 +23,17 @@
                 <en>Week 1</en>
             </name>
             <topics>
-                <topic>some_topic_from_test_1</topic>
+                <topic>
+                    some_topic_from_test_1
+                    <dict-group>
+                        <name>Code/Solutions</name>
+                        <path>code/solutions</path>
+                        <subdirs>
+                            <subdir>Example_1</subdir>
+                            <subdir>Example_3</subdir>
+                        </subdirs>
+                    </dict-group>
+                </topic>
                 <topic>a_topic_from_test_2</topic>
             </topics>
         </section>
@@ -38,14 +48,6 @@
         </section>
     </sections>
     <dict-groups>
-        <dict-group>
-            <name>Code/Solutions</name>
-            <path>code/solutions</path>
-            <subdirs>
-                <subdir>Example_1</subdir>
-                <subdir>Example_3</subdir>
-            </subdirs>
-        </dict-group>
         <dict-group>
             <name>Bonus</name>
             <path>div/workshops</path>

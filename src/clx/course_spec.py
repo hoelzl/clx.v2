@@ -60,7 +60,7 @@ class CourseSpec:
         for i, section_elem in enumerate(root.findall("sections/section"), start=1):
             name = parse_multilang(root, f"sections/section[{i}]/name")
             topics = [
-                TopicSpec(id=topic_elem.text)
+                TopicSpec(id=topic_elem.text.strip())
                 for topic_elem in section_elem.find("topics").findall("topic")
             ]
             sections.append(SectionSpec(name=name, topics=topics))
@@ -69,7 +69,7 @@ class CourseSpec:
     @staticmethod
     def parse_dict_groups(root) -> list[DictGroupSpec]:
         dict_groups = []
-        for dict_group in root.findall("dict-groups/dict-group"):
+        for dict_group in root.iter("dict-group"):
             dict_groups.append(DictGroupSpec.from_element(dict_group))
         return dict_groups
 

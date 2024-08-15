@@ -7,7 +7,8 @@ from attr import Factory, frozen
 
 from clx.course_file import CourseFile, Notebook
 from clx.utils.notebook_utils import find_images, find_imports
-from clx.utils.path_utils import is_ignored_dir_for_course, is_in_dir
+from clx.utils.path_utils import is_ignored_dir_for_course, is_in_dir, \
+    prog_lang_to_extension
 
 if TYPE_CHECKING:
     from clx.course import Course, Section
@@ -40,6 +41,10 @@ class Topic(ABC):
     def notebooks(self) -> list[Notebook]:
         return [file for file in self.files if isinstance(file, Notebook)]
 
+    @property
+    def prog_lang(self):
+        return self.course.spec.prog_lang
+
     def file_for_path(self, path: Path) -> CourseFile:
         return self._file_map.get(path)
 
@@ -64,9 +69,10 @@ class Topic(ABC):
             # effects of this change.
             # raise
 
+    @abstractmethod
     def matches_path(self, path: Path, check_is_file: bool = True) -> bool:
         """Returns True if the path is within the topic directory."""
-        return is_in_dir(path, self.path, check_is_file)
+        ...
 
     @abstractmethod
     def build_file_map(self): ...
@@ -83,6 +89,9 @@ class Topic(ABC):
 
 @frozen
 class DirectoryTopic(Topic):
+    def matches_path(self, path: Path, check_is_file: bool = True) -> bool:
+        return is_in_dir(path, self.path, check_is_file)
+
     def build_file_map(self):
         logger.debug(f"Building file map for file {self.path}")
         self.add_files_in_dir(self.path)
@@ -90,6 +99,9 @@ class DirectoryTopic(Topic):
 
 @frozen
 class FileTopic(Topic):
+    def matches_path(self, path: Path, check_is_file: bool = True) -> bool:
+        return is_in_dir(path, self.path.parent, check_is_file)
+
     def build_file_map(self):
         logger.debug(f"Building file map for directory {self.path}")
         self.add_file(self.path)
@@ -98,6 +110,8 @@ class FileTopic(Topic):
         if contents:
             included_images = find_images(contents)
             included_modules = find_imports(contents)
+            ext = prog_lang_to_extension(self.prog_lang)
+            included_module_files = {module + ext for module in included_modules}
             logger.debug(f"Found images: {included_images} and modules: {included_modules}")
-            for file in included_images | included_modules:
-                self.add_file(self.path / file)
+            for file in included_images | included_module_files:
+                self.add_file(self.path.parent / file)

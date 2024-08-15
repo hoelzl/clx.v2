@@ -38,7 +38,17 @@ COURSE_1_XML = """
                 <en>Week 1</en>
             </name>
             <topics>
-                <topic>some_topic_from_test_1</topic>
+                <topic>
+                    some_topic_from_test_1
+                    <dict-group>
+                        <name>Code/Solutions</name>
+                        <path>code/solutions</path>
+                        <subdirs>
+                            <subdir>Example_1</subdir>
+                            <subdir>Example_3</subdir>
+                        </subdirs>
+                    </dict-group>
+                </topic>
                 <topic>a_topic_from_test_2</topic>
             </topics>
         </section>
@@ -54,20 +64,12 @@ COURSE_1_XML = """
     </sections>
     <dict-groups>
         <dict-group>
-            <name>Code/Solutions</name>
-            <path>code/solutions</path>
-            <subdirs>
-                <subdir>Example_1</subdir>
-                <subdir>Example_3</subdir>
-            </subdirs>
-        </dict-group>
-        <dict-group>
             <name>Bonus</name>
             <path>div/workshops</path>
         </dict-group>
         <!-- We can have an empty name to copy files into the course root -->
         <dict-group>
-            <name></name>
+            <name/>
             <path>root-files</path>
         </dict-group>
     </dict-groups>
@@ -130,6 +132,7 @@ def course_2_xml():
 @pytest.fixture
 def course_1_spec():
     from clx.course_spec import CourseSpec
+
     xml_stream = io.StringIO(COURSE_1_XML)
 
     return CourseSpec.from_file(xml_stream)
@@ -138,6 +141,7 @@ def course_1_spec():
 @pytest.fixture
 def course_2_spec():
     from clx.course_spec import CourseSpec
+
     xml_stream = io.StringIO(COURSE_2_XML)
 
     return CourseSpec.from_file(xml_stream)
@@ -146,6 +150,7 @@ def course_2_spec():
 @pytest.fixture
 def course_1(course_1_spec):
     from clx.course import Course
+
     course = Course(course_1_spec, DATA_DIR, Path("/output"))
     return course
 
@@ -153,6 +158,7 @@ def course_1(course_1_spec):
 @pytest.fixture
 def course_2(course_2_spec):
     from clx.course import Course
+
     course = Course(course_2_spec, DATA_DIR, Path("/output"))
     return course
 
@@ -160,11 +166,13 @@ def course_2(course_2_spec):
 @pytest.fixture
 def section_1(course_1):
     from clx.course import Section
+
     return Section(name=Text(en="Week 1", de="Woche 1"), course=course_1)
 
 
 @pytest.fixture
 def topic_1(section_1):
     from clx.course import Topic
+
     path = DATA_DIR / "slides/module_000_test_1/topic_100_some_topic_from_test_1"
     return Topic.from_id(id="some_topic", section=section_1, path=path)

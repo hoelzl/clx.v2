@@ -94,6 +94,7 @@ class CopyDictGroupOperation(Operation):
         ]
         await asyncio.gather(*tasks)
 
+
 @frozen
 class ProcessNotebookOperation(Operation):
     input_file: "Notebook"
@@ -155,9 +156,7 @@ class ProcessNotebookOperation(Operation):
         payload = self.build_payload()
         logger.debug(f"Notebook-Processor: sending request: {payload}")
         try:
-            await nc.publish(
-                "nb.process", json.dumps(payload).encode()
-            )
+            await nc.publish("nb.process", json.dumps(payload).encode())
         except Exception as e:
             logger.exception(
                 "Error while publishing notebook '%s': '%s'", self.reply_subject, e
@@ -166,6 +165,13 @@ class ProcessNotebookOperation(Operation):
 
     def build_payload(self):
         notebook_path = self.input_file.relative_path.name
+        other_files = {
+            str(file.relative_path): file.path.read_text()
+            for file in self.input_file.topic.files
+            if file != self.input_file
+            and not is_image_file(file.path)
+            and not is_image_source_file(file.path)
+        }
         return {
             "notebook_text": self.input_file.path.read_text(),
             "notebook_path": notebook_path,
@@ -174,13 +180,7 @@ class ProcessNotebookOperation(Operation):
             "language": self.lang,
             "notebook_format": self.format,
             "output_type": self.mode,
-            "other_files": {
-                str(file.relative_path): file.path.read_text()
-                for file in self.input_file.topic.files
-                if file != self.input_file
-                and not is_image_file(file.path)
-                and not is_image_source_file(file.path)
-            },
+            "other_files": other_files,
         }
 
     async def wait_for_processed_notebook(self, sub):
