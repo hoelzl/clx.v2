@@ -20,7 +20,7 @@ payload = {
 
 async def test_notebook_processor():
     nc = await nats.connect(NATS_URL)
-    reply = await nc.request("nb.process", json.dumps(payload).encode(), timeout=5)
+    reply = await nc.request("notebook.process", json.dumps(payload).encode(), timeout=5)
     result = json.loads(reply.data.decode())
     if isinstance(result, dict):
         if notebook := result.get("result"):

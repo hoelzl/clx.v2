@@ -9,10 +9,15 @@ from attrs import Factory, define, frozen
 from clx.course_file import CourseFile, Notebook
 from clx.course_spec import CourseSpec, DictGroupSpec
 from clx.topic import Topic
-from clx.utils.div_uils import File, execution_stages
-from clx.utils.path_utils import (SKIP_DIRS_FOR_OUTPUT, SKIP_DIRS_PATTERNS,
-                                  is_ignored_dir_for_course, is_in_dir, output_path_for,
-                                  simplify_ordered_name, )
+from clx.utils.div_uils import FIRST_EXECUTION_STAGE, File, execution_stages
+from clx.utils.path_utils import (
+    SKIP_DIRS_FOR_OUTPUT,
+    SKIP_DIRS_PATTERNS,
+    is_ignored_dir_for_course,
+    is_in_dir,
+    output_path_for,
+    simplify_ordered_name,
+)
 from clx.utils.text_utils import Text
 
 if TYPE_CHECKING:

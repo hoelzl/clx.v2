@@ -15,7 +15,7 @@ async def test_notebook_processor():
     payload = NotebookPayload(
         notebook_text="# %%\nprint('Hello, world!')",
         notebook_path="test_notebook.py",
-        reply_subject="nb.completed.test_notebook_1",
+        reply_subject="notebook.result.test_notebook_1",
         prog_lang="python",
         language="en",
         notebook_format="html",

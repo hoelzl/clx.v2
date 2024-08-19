@@ -2,20 +2,26 @@ import asyncio
 import json
 import logging
 import os
-from dataclasses import dataclass
 
 import nats
-from nats.aio.msg import Msg
+from nats.js import JetStreamContext
+from nats.js.api import AckPolicy, ConsumerConfig
 
-from .payload import NotebookPayload
 from .notebook_processor import NotebookProcessor
 from .output_spec import create_output_spec
+from .payload import NotebookPayload
 
 NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
 QUEUE_GROUP = os.environ.get("NOTEBOOK_PROCESSOR_QUEUE_GROUP", "NOTEBOOK_PROCESSOR")
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 LOG_CELL_PROCESSING = os.environ.get("LOG_CELL_PROCESSING", "False") == "True"
+
+NB_PROCESS_SUBJECT = "notebook.process"
+NB_PROCESS_STREAM = "NOTEBOOK_PROCESS_STREAM"
+NB_RESULT_STREAM = "NOTEBOOK_RESULT_STREAM"
+NB_RESULT_SUBJECT = "notebook.result"
+
 
 # Logging setup
 logging.basicConfig(
@@ -28,29 +34,18 @@ logger = logging.getLogger(__name__)
 shutdown_flag = asyncio.Event()
 
 
-@dataclass
-class ProcessingResult:
-    processed_notebook: str
 
-    @property
-    def result_payload(self) -> bytes:
-        return json.dumps({"result": self.processed_notebook}).encode("utf-8")
+async def extract_payload(msg):
+    try:
+        data = json.loads(msg.data)
+        logger.debug(f"Received JSON data: {data}")
+        payload = NotebookPayload(**data)
+        return payload
+    except json.JSONDecodeError as e:
+        logger.exception("JSON decode error: %s", e)
+        raise
 
-
-async def connect_client_with_retry(nats_url: str, num_retries: int = 5):
-    for i in range(num_retries):
-        try:
-            logger.debug(f"Trying to connect to NATS at {nats_url}")
-            nc = await nats.connect(nats_url)
-            logger.info(f"Connected to NATS at {nats_url}")
-            return nc
-        except Exception as e:
-            logger.exception("Error connecting to NATS: %s", e)
-            await asyncio.sleep(2**i)
-    raise OSError("Could not connect to NATS")
-
-
-async def process_payload(payload: NotebookPayload) -> ProcessingResult:
+async def process_notebook_file(payload: NotebookPayload) -> str:
     logger.debug(f"Processing notebook payload for '{payload.reply_subject}'")
     output_spec = create_output_spec(
         output_type=payload.output_type,
@@ -61,54 +56,96 @@ async def process_payload(payload: NotebookPayload) -> ProcessingResult:
     logger.debug("Output spec created")
     processor = NotebookProcessor(output_spec)
     processed_notebook = await processor.process_notebook(payload)
-    logger.debug(f"Processed notebook: {processed_notebook[:100]}")
-    return ProcessingResult(processed_notebook)
+    logger.debug(f"Processed notebook: {processed_notebook[:60]}")
+    return processed_notebook
 
 
-async def process_message(message: Msg, client: nats.NATS) -> None:
-    try:
-        payload = handle_incoming_message(message)
-        # await asyncio.create_task(process_and_publish(payload, client))
-        await process_and_publish(payload, client)
-    except Exception as e:
-        logger.exception("Error handling incoming message: %s", e)
+class NotebookConverter:
+    def __init__(self):
+        self.nats_client: nats.NATS | None = None
+        self.jetstream: JetStreamContext | None = None
+        self.subscription: JetStreamContext.PushSubscription | None = None
 
+    async def run(self):
+        await self.connect_nats()
+        await self.subscribe_to_events()
+        try:
+            await self.fetch_and_process_messages()
+        finally:
+            if self.nats_client:
+                await self.nats_client.close()
 
+    async def connect_nats(self):
+        try:
+            self.nats_client = await nats.connect(NATS_URL)
+            self.jetstream = self.nats_client.jetstream()
+            logger.info(f"Connected to NATS at {NATS_URL}")
+        except Exception as e:
+            logger.exception("Error connecting to NATS: %s", e)
+            raise
 
-def handle_incoming_message(message):
-    try:
-        data = json.loads(message.data)
-        payload = NotebookPayload(**data)
-        logger.debug(f"Received JSON data: {data}"[:60])
-        return payload
-    except Exception as e2:
-        logger.exception("Error handling incoming message: %s", e2)
-        raise
+    async def subscribe_to_events(self):
+        subject = NB_PROCESS_SUBJECT
+        stream = NB_PROCESS_STREAM
+        logger.debug(f"Subscribing to subject: '{subject}' on stream '{stream}'")
+        config = ConsumerConfig(
+            ack_policy=AckPolicy.EXPLICIT,
+            max_deliver=1,
+        )
+        self.subscription = await self.jetstream.subscribe(
+            subject=subject, queue=QUEUE_GROUP, stream=stream, config=config
+        )
+        logger.info(f"Subscribed to subject: '{subject}' on stream '{stream}'")
 
+    async def fetch_and_process_messages(self):
+        while True:
+            try:
+                await self.fetch_and_process_one_message()
+            except TimeoutError:
+                continue
+            except KeyboardInterrupt:
+                logger.info("Received interrupt, shutting down...")
+            except Exception as e:
+                logger.exception(f"Error while handling event: {e}", exc_info=e)
+                # Sleep to limit resources when we have an error inside the program...
+                await asyncio.sleep(1.0)
+                continue
 
-async def process_and_publish(payload: NotebookPayload, client: nats.NATS):
-    try:
-        result = await process_payload(payload)
-        logger.debug(f"Result: {result.processed_notebook[:60]}")
-        await client.publish(payload.reply_subject, result.result_payload)
-    except Exception as e:
-        logger.exception("Error processing notebook: %s", e)
-        response = json.dumps({"error": str(e)})
-        await client.publish(payload.reply_subject, response.encode("utf-8"))
+    async def fetch_and_process_one_message(self):
+        msg = await self.subscription.next_msg()
+        await msg.ack()
+        logger.debug(f"Processing message {msg.data[:40]}")
+        await self.process_message(msg)
 
+    async def process_message(self, msg):
+        payload = await extract_payload(msg)
+        try:
+            result = await process_notebook_file(payload)
+            logger.debug(f"Result: {result[:60]}")
+            response = json.dumps({"result": result})
+            await self.publish_response(payload.reply_subject, response)
+        except Exception as e:
+            logger.exception(f"Error while processing notebook: {e}", exc_info=e)
+            await self.jetstream.publish(
+                subject=payload.reply_subject,
+                stream=NB_RESULT_STREAM,
+                payload=json.dumps({"error": str(e)}).encode("utf-8"),
+            )
 
-async def main():
-    client = await connect_client_with_retry(NATS_URL)
-    subscriber = await client.subscribe("nb.process", queue=QUEUE_GROUP)
-    await client.flush()
-    try:
-        async for message in subscriber.messages:
-            await process_message(message, client)
-            # await asyncio.sleep(0.1)  # Short delay before processing the next message
-    finally:
-        await client.close()
+    async def publish_response(self, reply_subject, response):
+        result_stream = NB_RESULT_STREAM
+        logger.debug(
+            f"Sending reply for subject '{reply_subject}' on "
+            f"stream '{result_stream}'."
+        )
+        await self.jetstream.publish(
+            subject=reply_subject,
+            stream=result_stream,
+            payload=response.encode("utf-8"),
+        )
 
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    converter = NotebookConverter()
+    asyncio.run(converter.run())

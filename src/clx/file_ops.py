@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import shutil
 from abc import ABC
 from pathlib import Path
@@ -8,18 +9,27 @@ from typing import Any, TYPE_CHECKING
 
 import nats
 from attrs import frozen
+from nats.js import JetStreamContext
+from nats.js.api import AckPolicy, ConsumerConfig
 
 from clx.operation import Operation
 from clx.utils.nats_utils import process_image_request
 from clx.utils.path_utils import is_image_file, is_image_source_file
 from clx.utils.text_utils import sanitize_subject_name, unescape
-from nb.nats_server import NATS_URL
 
 if TYPE_CHECKING:
     from clx.course import DictGroup
     from clx.course_file import DataFile, CourseFile, Notebook
 
 logger = logging.getLogger(__name__)
+
+NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
+
+# Must be the same as in nb.nats_server
+NB_PROCESS_SUBJECT = "notebook.process"
+NB_PROCESS_STREAM = "NOTEBOOK_PROCESS_STREAM"
+NB_RESULT_STREAM = "NOTEBOOK_RESULT_STREAM"
+NB_RESULT_SUBJECT = "notebook.result"
 
 
 @frozen
@@ -46,7 +56,7 @@ class ConvertPlantUmlFile(ConvertFileOperation):
             f"Converting PlantUML file {self.input_file.relative_path} "
             f"to {self.output_file}"
         )
-        await process_image_request(self, "PlantUML", "plantuml.process")
+        await process_image_request(self, "PlantUML", "plantuml_process_stream")
         self.input_file.generated_outputs.add(self.output_file)
 
 
@@ -57,8 +67,7 @@ class ConvertDrawIoFile(ConvertFileOperation):
             f"Converting DrawIO file {self.input_file.relative_path} "
             f"to {self.output_file}"
         )
-        # await self.process_request()
-        await process_image_request(self, "DrawIO", "drawio.process")
+        await process_image_request(self, "DrawIO", "drawio_process_stream")
         self.input_file.generated_outputs.add(self.output_file)
 
 
@@ -111,52 +120,76 @@ class ProcessNotebookOperation(Operation):
         lang = self.lang
         format_ = self.format
         mode = self.mode
-        reply_subject = f"{id_}_{num}_{lang}_{format_}_{mode}"
-        return sanitize_subject_name(f"nb.completed.{reply_subject}")
+        subject_postfix = f"{id_}_{num}_{lang}_{format_}_{mode}"
+        return sanitize_subject_name(f"notebook.result.{subject_postfix}")
 
     async def exec(self, *args, **kwargs) -> Any:
-        logger.info(
-            f"Processing notebook '{self.input_file.relative_path}' "
-            f"to '{self.output_file}'"
-        )
-        await self.process_request()
-        self.input_file.generated_outputs.add(self.output_file)
+        try:
+            logger.info(
+                f"Processing notebook '{self.input_file.relative_path}' "
+                f"to '{self.output_file}'"
+            )
+            await self.process_request()
+            self.input_file.generated_outputs.add(self.output_file)
+        except Exception as e:
+            logger.exception(
+                f"Error while processing notebook {self.input_file.relative_path}: {e}"
+            )
+            raise
 
     async def process_request(self):
+        logger.debug(f"Notebook-Processor: Processing request for "
+                     f"{self.input_file.relative_path}")
+
+        logger.debug(f"Notebook-Processor: Processing {self.input_file.relative_path} ")
+        nc = await nats.connect(NATS_URL)
         try:
-            logger.debug(f"Processing {self.input_file.relative_path} ")
-            nc = await nats.connect(NATS_URL)
-            await nc.flush()
-            sub = await self.subscribe_to_reply_subject(nc)
-            try:
-                await self.send_nb_process_msg(nc)
-                await self.wait_for_processed_notebook(sub)
-            finally:
-                await nc.drain()
-                await nc.close()
+            js: JetStreamContext = nc.jetstream()
+            psub = await self.subscribe_to_reply_subject(nc, js)
+            await self.send_nb_process_msg(js)
+            msg = await self.wait_for_processed_notebook_msg(psub)
+            logger.debug(f"Notebook-Processor: Received  reply: {msg.data[:40]}")
+            self.write_notebook_to_file(msg)
         except Exception as e:
             logger.exception(
                 "Notebook-Processor: Error while processing request: " "%s", e
             )
+        finally:
+            await nc.close()
+            logger.debug("Notebook-Processor: Cleaned up")
 
-    async def subscribe_to_reply_subject(self, nc):
+    async def subscribe_to_reply_subject(self, nc: nats.NATS, js: JetStreamContext):
         try:
-            sub = await nc.subscribe(self.reply_subject)
+            logger.debug(
+                f"Subscribing to subject '{self.reply_subject}' on stream "
+                f"{NB_RESULT_STREAM}"
+            )
+            config = ConsumerConfig(ack_policy=AckPolicy.EXPLICIT, max_deliver=1, )
+            psub = await js.pull_subscribe(
+                subject=self.reply_subject, stream=NB_RESULT_STREAM, config=config,
+            )
             await nc.flush()
+            logger.debug(
+                f"Subscribed to reply subject '{self.reply_subject}' on "
+                f"stream {NB_RESULT_STREAM}"
+            )
         except Exception as e:
             logger.exception(
-                "Error while subscribing to reply subject '%s': '%s'",
-                self.reply_subject,
-                e,
+                "Error while subscribing to reply subject "
+                f"'{self.reply_subject}': {e}"
             )
             raise
-        return sub
+        return psub
 
-    async def send_nb_process_msg(self, nc):
+    async def send_nb_process_msg(self, js: JetStreamContext):
         payload = self.build_payload()
         logger.debug(f"Notebook-Processor: sending request: {payload}")
         try:
-            await nc.publish("nb.process", json.dumps(payload).encode())
+            await js.publish(
+                subject=NB_PROCESS_SUBJECT,
+                stream=NB_PROCESS_STREAM,
+                payload=json.dumps(payload).encode(),
+            )
         except Exception as e:
             logger.exception(
                 "Error while publishing notebook '%s': '%s'", self.reply_subject, e
@@ -183,18 +216,23 @@ class ProcessNotebookOperation(Operation):
             "other_files": other_files,
         }
 
-    async def wait_for_processed_notebook(self, sub):
+    async def wait_for_processed_notebook_msg(self, psub):
         logger.debug(
             f"Notebook-Processor: Waiting for processed notebook {self.reply_subject}"
         )
         while True:
             try:
-                msg = await sub.next_msg(timeout=1)
-                self.write_notebook_to_file(msg)
-                break
+                logger.debug(f"Waiting for notebook data")
+                msgs = await psub.fetch(1)
+                if len(msgs) == 0:
+                    raise ValueError("No notebook received")
+                for msg in msgs:
+                    logger.debug(f"Received message, sending ack: {msg.data[:40]}")
+                    await msg.ack()
+                logger.debug(f"Received {len(msgs)} notebook(s)")
+                return msgs[0]
             except asyncio.TimeoutError:
                 continue
-        logger.debug(f"Notebook-Processor: Done with {self.reply_subject} ")
 
     def write_notebook_to_file(self, msg):
         data = json.loads(msg.data.decode())

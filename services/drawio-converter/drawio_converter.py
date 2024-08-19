@@ -8,11 +8,17 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import nats
+from nats.js import JetStreamContext
+from nats.js.api import AckPolicy, ConsumerConfig
 
 # Configuration
 NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
 QUEUE_GROUP = os.environ.get("DRAWIO_CONVERTER_QUEUE_GROUP", "DRAWIO_CONVERTER")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG").upper()
+
+DRAWIO_PROCESS_SUBJECT = "drawio.process"
+DRAWIO_PROCESS_STREAM = "DRAWIO_PROCESS_STREAM"
+IMG_RESULT_STREAM = "IMG_RESULT_STREAM"
 
 # Set up logging
 logging.basicConfig(
@@ -41,30 +47,64 @@ async def extract_payload(msg):
 
 
 class DrawioConverter:
+
     def __init__(self):
         self.nats_client: nats.NATS | None = None
+        self.jetstream: JetStreamContext | None = None
+        self.subscription: JetStreamContext.PushSubscription | None = None
+
+    async def run(self):
+        await self.connect_nats()
+        await self.subscribe_to_events()
+        try:
+            await self.fetch_and_process_messages()
+        finally:
+            if self.nats_client:
+                await self.nats_client.close()
 
     async def connect_nats(self):
         try:
             self.nats_client = await nats.connect(NATS_URL)
+            self.jetstream = self.nats_client.jetstream()
             logger.info(f"Connected to NATS at {NATS_URL}")
         except Exception as e:
             logger.exception("Error connecting to NATS: %s", e)
             raise
 
     async def subscribe_to_events(self):
-        subject = f"drawio.process"
-        queue = QUEUE_GROUP
-        logger.debug(f"Subscribing to subject: {subject} on queue group {queue}")
-        await self.nats_client.subscribe(
-            subject,
-            cb=self.handle_event,
-            queue=queue,
+        subject = DRAWIO_PROCESS_SUBJECT
+        stream = DRAWIO_PROCESS_STREAM
+        logger.debug(f"Subscribing to subject: '{subject}' on stream '{stream}'")
+        config = ConsumerConfig(
+            ack_policy=AckPolicy.EXPLICIT,
+            max_deliver=1,
         )
-        await self.nats_client.flush()
-        logger.info(f"Subscribed to subject: {subject} on queue group {queue}")
+        self.subscription = await self.jetstream.subscribe(
+            subject=subject, queue=QUEUE_GROUP, stream=stream, config=config
+        )
+        logger.info(f"Subscribed to subject: '{subject}' on stream '{stream}'")
 
-    async def handle_event(self, msg):
+    async def fetch_and_process_messages(self):
+        while True:
+            try:
+                await self.fetch_and_process_one_message()
+            except TimeoutError:
+                continue
+            except KeyboardInterrupt:
+                logger.info("Received interrupt, shutting down...")
+            except Exception as e:
+                logger.exception(f"Error while handling event: {e}", exc_info=e)
+                # Sleep to limit resources when we have an error inside the program...
+                await asyncio.sleep(1.0)
+                continue
+
+    async def fetch_and_process_one_message(self):
+        msg = await self.subscription.next_msg()
+        await msg.ack()
+        logger.debug(f"Processing message {msg.data[:40]}")
+        await self.process_message(msg)
+
+    async def process_message(self, msg):
         payload = await extract_payload(msg)
         try:
             result = await self.process_drawio_file(payload)
@@ -72,14 +112,26 @@ class DrawioConverter:
             encoded_result = b64encode(result)
             logger.debug(f"Result: {len(result)} bytes: {encoded_result[:20]}")
             response = json.dumps({"result": encoded_result.decode("utf-8")})
-            await self.nats_client.publish(
-                payload.reply_subject, response.encode("utf-8")
-            )
+            await self.publish_response(payload.reply_subject, response)
         except Exception as e:
-            logger.exception("Error while handling event: %s", e)
-            await self.nats_client.publish(
-                payload.reply_subject, json.dumps({"error": str(e)}).encode("utf-8")
+            logger.exception(f"Error while processing DrawIO file: {e}", exc_info=e)
+            await self.jetstream.publish(
+                subject=payload.reply_subject,
+                stream=IMG_RESULT_STREAM,
+                payload=json.dumps({"error": str(e)}).encode("utf-8"),
             )
+
+    async def publish_response(self, reply_subject, response):
+        result_stream = IMG_RESULT_STREAM
+        logger.debug(
+            f"Sending reply for subject '{reply_subject}' on "
+            f"stream '{result_stream}'."
+        )
+        await self.jetstream.publish(
+            subject=reply_subject,
+            stream=result_stream,
+            payload=response.encode("utf-8"),
+        )
 
     async def process_drawio_file(self, data: DrawioPayload) -> bytes:
         with TemporaryDirectory() as tmp_dir:
@@ -161,18 +213,6 @@ class DrawioConverter:
             logger.error(
                 f"Error optimizing SVG {output_path}: {optimize_stderr.decode()}"
             )
-
-    async def run(self):
-        await self.connect_nats()
-        await self.subscribe_to_events()
-        try:
-            while True:
-                await asyncio.sleep(1)
-        except KeyboardInterrupt:
-            logger.info("Received interrupt, shutting down...")
-        finally:
-            if self.nats_client:
-                await self.nats_client.close()
 
 
 if __name__ == "__main__":

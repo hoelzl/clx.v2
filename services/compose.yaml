@@ -13,13 +13,25 @@ services:
         networks:
             - app-network
 
+    nats-init:
+        build: ./nats-init
+        image: mhoelzl/nats-init
+        depends_on:
+            nats:
+                condition: service_started
+        environment:
+            - NATS_URL=nats://nats:4222
+            - LOG_LEVEL=DEBUG
+        networks:
+            - app-network
+
     notebook-processor:
         build:
             context: ./notebook-processor
         image: mhoelzl/notebook-processor
         depends_on:
-            nats:
-                condition: service_started
+            nats-init:
+                condition: service_completed_successfully
         networks:
             - app-network
         develop:
@@ -29,7 +41,7 @@ services:
                     target: /app
         environment:
             - NATS_URL=nats://nats:4222
-            - LOG_LEVEL=INFO
+            - LOG_LEVEL=DEBUG
         deploy:
             mode: replicated
             replicas: 1
@@ -39,11 +51,11 @@ services:
             context: ./drawio-converter
         image: mhoelzl/drawio-converter
         depends_on:
-            nats:
-                condition: service_started
+            nats-init:
+                condition: service_completed_successfully
         environment:
             - NATS_URL=nats://nats:4222
-            - LOG_LEVEL=INFO
+            - LOG_LEVEL=DEBUG
             - DISPLAY=:99
         networks:
             - app-network
@@ -62,11 +74,11 @@ services:
             context: ./plantuml-converter
         image: mhoelzl/plantuml-converter
         depends_on:
-            nats:
-                condition: service_started
+            nats-init:
+                condition: service_completed_successfully
         environment:
             - NATS_URL=nats://nats:4222
-            - LOG_LEVEL=INFO
+            - LOG_LEVEL=DEBUG
         networks:
             - app-network
         develop:
