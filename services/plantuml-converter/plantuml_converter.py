@@ -112,7 +112,7 @@ class PlantUmlConverter:
                 continue
 
     async def fetch_and_process_one_message(self):
-        msg = await self.subscription.next_msg()
+        msg = await self.subscription.next_msg(timeout=None)
         await msg.ack()
         logger.debug(f"Processing message {msg.data[:40]}")
         await self.process_message(msg)

@@ -2,12 +2,14 @@ import asyncio
 import json
 import logging
 import os
+from asyncio import CancelledError
 from base64 import b64decode
 from typing import TYPE_CHECKING
 
 import nats
 from nats import NATS
 from nats.js import JetStreamContext
+from nats.js.api import AckPolicy, ConsumerConfig
 
 from clx.utils.text_utils import sanitize_subject_name
 
@@ -41,6 +43,7 @@ NATS_STREAMS = {
 }
 IMG_RESULT_STREAM = NATS_STREAMS["img_result_stream"]
 
+reply_counter_lock = asyncio.Lock()
 reply_counter = 0
 
 
@@ -54,7 +57,7 @@ async def process_image_request(
     nc: NATS = await nats.connect(NATS_URL)
     js: JetStreamContext = nc.jetstream()
     try:
-        reply_subject, reply_stream = _reply_subject_and_stream_for_operation(op)
+        reply_subject, reply_stream = await _reply_subject_and_stream_for_operation(op)
         psub = await _subscribe_to_nats_subject(
             nc, js, service, reply_subject, reply_stream
         )
@@ -67,15 +70,30 @@ async def process_image_request(
             f"{service}: Sending Request to {nats_subject} on stream "
             f"{nats_stream_name} with reply subject {reply_subject}"
         )
-        await js.publish(
-            subject=nats_subject,
-            stream=nats_stream_name,
-            payload=json.dumps(payload).encode(),
-        )
-        logger.debug(
-            f"{service}: Published to subject '{nats_subject}' on "
-            f"stream '{nats_stream_name}', waiting for response"
-        )
+        for num_tries in range(10):
+            try:
+                await js.publish(
+                    subject=nats_subject,
+                    stream=nats_stream_name,
+                    payload=json.dumps(payload).encode(),
+                )
+                logger.debug(
+                    f"{service}: Published to subject '{nats_subject}' on "
+                    f"stream '{nats_stream_name}', waiting for response"
+                )
+                break
+            except CancelledError:
+                logger.info(
+                    f"{service}: Timed out publishing on '{nats_subject}' on "
+                    f"stream '{nats_stream_name}, retrying"
+                )
+                continue
+            except Exception as e:
+                logger.exception(
+                    f"Error while publishing image on subject '{nats_subject}' "
+                    f"on stream '{nats_stream_name}'", exc_info=e
+                )
+                raise
         msg = await _wait_for_processed_image_msg(service, psub)
         logger.debug(f"{service}: Received reply: {msg.data[:40]}")
         result = json.loads(msg.data.decode())
@@ -94,9 +112,10 @@ async def process_image_request(
         logger.debug(f"{service}: Cleaned up")
 
 
-def _reply_subject_and_stream_for_operation(file: "ConvertFileOperation"):
+async def _reply_subject_and_stream_for_operation(file: "ConvertFileOperation"):
     global reply_counter
-    reply_counter += 1
+    async with reply_counter_lock:
+        reply_counter += 1
     return (
         sanitize_subject_name(
             f"img.result.{file.input_file.relative_path}_{reply_counter}"
@@ -113,32 +132,31 @@ async def _subscribe_to_nats_subject(
             f"{service}: Subscribing to subject '{nats_subject}' on stream "
             f"'{nats_stream}'"
         )
-        psub = await js.pull_subscribe(subject=nats_subject, stream=nats_stream)
+        config = ConsumerConfig(ack_policy=AckPolicy.EXPLICIT, max_deliver=1, )
+        sub = await js.subscribe(subject=nats_subject, stream=nats_stream, config=config)
         await nc.flush()
         logger.debug(
             f"{service}: Subscribed to reply subject '{nats_subject}' on stream "
             f"'{nats_stream}'"
-    )
+        )
     except Exception as e:
         logger.exception(
             f"{service}: Error while subscribing to nats subject "
             f"'{nats_subject}': {e}"
         )
         raise
-    return psub
+    return sub
 
 
-async def _wait_for_processed_image_msg(service, psub):
-    while True:
+async def _wait_for_processed_image_msg(service, sub):
+    for _ in range(10):
         try:
             logger.debug(f"{service}: Waiting for image data")
-            msgs = await psub.fetch(1)
-            if len(msgs) == 0:
-                raise ValueError("No image received")
-            for msg in msgs:
-                logger.debug(f"{service}: Received message, sending ack: {msg}")
-                await msg.ack()
-            logger.debug(f"{service}: Received {len(msgs)} image(s)")
-            return msgs[0]
+            msg = await sub.next_msg(timeout=None)
+            logger.debug(
+                f"{service}: Received message, sending ack: " f"{msg.data[:40]}"
+            )
+            await msg.ack()
+            return msg
         except asyncio.TimeoutError:
             continue

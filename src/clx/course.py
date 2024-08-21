@@ -116,6 +116,11 @@ class DictGroup:
         )
 
 
+def chunks(lst: list, n: int) -> list[list]:
+    for i in range(0, len(lst), n):
+        yield lst[i : i + n]
+
+
 @define
 class Course:
     spec: CourseSpec
@@ -220,22 +225,31 @@ class Course:
 
     async def process_all(self):
         logger.info(f"Processing all files for {self.course_root}")
-        for stage in execution_stages():
-            logger.debug(f"Processing stage {stage}")
-            operations = []
-            for file in self.files:
-                if file.execution_stage == stage:
-                    logger.debug(f"Processing file {file.path}")
-                    operations.append(
-                        await file.get_processing_operation(self.output_root)
+        for section in self.sections:
+            logger.debug(f"Processing section {section.name}")
+            for stage in execution_stages():
+                logger.debug(f"Processing stage {stage} for section {section.name}")
+                operations = []
+                for file in section.files:
+                    if file.execution_stage == stage:
+                        logger.debug(f"Processing file {file.path}")
+                        operations.append(
+                            await file.get_processing_operation(self.output_root)
+                        )
+                op_chunks = chunks(operations, 10)
+                for op_chunk in op_chunks:
+                    await asyncio.gather(
+                        *[op.exec() for op in op_chunk], return_exceptions=True
                     )
-            for dict_group in self.dict_groups:
-                logger.debug(f"Processing dict group {dict_group.name}")
-                operations.append(await dict_group.get_processing_operation())
-            await asyncio.gather(
-                *[op.exec() for op in operations], return_exceptions=True
-            )
-            logger.debug(f"Processed {len(operations)} files for stage {stage}")
+                    await asyncio.sleep(0.5)
+                logger.debug(f"Processed {len(operations)} files for stage {stage}")
+
+        operations = []
+        for dict_group in self.dict_groups:
+            logger.debug(f"Processing dict group {dict_group.name}")
+            operations.append(await dict_group.get_processing_operation())
+        await asyncio.gather(*[op.exec() for op in operations],
+            return_exceptions=True)
 
     def _build_sections(self):
         logger.debug(f"Building sections for {self.course_root}")

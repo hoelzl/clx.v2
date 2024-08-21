@@ -4,6 +4,7 @@ import logging
 import os
 import shutil
 from abc import ABC
+from asyncio import CancelledError
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
@@ -138,18 +139,23 @@ class ProcessNotebookOperation(Operation):
             raise
 
     async def process_request(self):
-        logger.debug(f"Notebook-Processor: Processing request for "
-                     f"{self.input_file.relative_path}")
+        logger.debug(
+            f"Notebook-Processor: Processing request for "
+            f"{self.input_file.relative_path}"
+        )
 
         logger.debug(f"Notebook-Processor: Processing {self.input_file.relative_path} ")
         nc = await nats.connect(NATS_URL)
         try:
             js: JetStreamContext = nc.jetstream()
-            psub = await self.subscribe_to_reply_subject(nc, js)
+            sub = await self.subscribe_to_reply_subject(nc, js)
             await self.send_nb_process_msg(js)
-            msg = await self.wait_for_processed_notebook_msg(psub)
-            logger.debug(f"Notebook-Processor: Received  reply: {msg.data[:40]}")
-            self.write_notebook_to_file(msg)
+            msg = await self.wait_for_processed_notebook_msg(sub)
+            if msg is not None and msg.data:
+                logger.debug(f"Notebook-Processor: Received  reply: {msg.data[:40]}")
+                self.write_notebook_to_file(msg)
+            else:
+                logger.error(f"Notebook-Processor: Received error: {msg}")
         except Exception as e:
             logger.exception(
                 "Notebook-Processor: Error while processing request: " "%s", e
@@ -164,9 +170,12 @@ class ProcessNotebookOperation(Operation):
                 f"Subscribing to subject '{self.reply_subject}' on stream "
                 f"{NB_RESULT_STREAM}"
             )
-            config = ConsumerConfig(ack_policy=AckPolicy.EXPLICIT, max_deliver=1, )
-            psub = await js.pull_subscribe(
-                subject=self.reply_subject, stream=NB_RESULT_STREAM, config=config,
+            config = ConsumerConfig(
+                ack_policy=AckPolicy.EXPLICIT,
+                max_deliver=1,
+            )
+            sub = await js.subscribe(
+                subject=self.reply_subject, stream=NB_RESULT_STREAM, config=config
             )
             await nc.flush()
             logger.debug(
@@ -179,22 +188,35 @@ class ProcessNotebookOperation(Operation):
                 f"'{self.reply_subject}': {e}"
             )
             raise
-        return psub
+        return sub
 
     async def send_nb_process_msg(self, js: JetStreamContext):
         payload = self.build_payload()
         logger.debug(f"Notebook-Processor: sending request: {payload}")
-        try:
-            await js.publish(
-                subject=NB_PROCESS_SUBJECT,
-                stream=NB_PROCESS_STREAM,
-                payload=json.dumps(payload).encode(),
-            )
-        except Exception as e:
-            logger.exception(
-                "Error while publishing notebook '%s': '%s'", self.reply_subject, e
-            )
-            raise
+        for num_tries in range(10):
+            try:
+                await js.publish(
+                    subject=NB_PROCESS_SUBJECT,
+                    stream=NB_PROCESS_STREAM,
+                    payload=json.dumps(payload).encode(),
+                )
+                logger.debug(
+                    f"Notebook-Processor: Published to subject "
+                    f"{NB_PROCESS_SUBJECT} on stream {NB_PROCESS_STREAM}, "
+                    f"waiting for response"
+                )
+                break
+            except CancelledError:
+                logger.info(
+                    f"Notebook-Processor: Timed out while publishing to subject "
+                    f"{NB_PROCESS_SUBJECT} on stream {NB_PROCESS_STREAM}, retrying"
+                )
+                continue
+            except Exception as e:
+                logger.exception(
+                    "Error while publishing notebook '%s': '%s'", self.reply_subject, e
+                )
+                raise
 
     def build_payload(self):
         notebook_path = self.input_file.relative_path.name
@@ -216,23 +238,22 @@ class ProcessNotebookOperation(Operation):
             "other_files": other_files,
         }
 
-    async def wait_for_processed_notebook_msg(self, psub):
+    async def wait_for_processed_notebook_msg(self, sub):
         logger.debug(
             f"Notebook-Processor: Waiting for processed notebook {self.reply_subject}"
         )
-        while True:
+        for _ in range(10):
             try:
                 logger.debug(f"Waiting for notebook data")
-                msgs = await psub.fetch(1)
-                if len(msgs) == 0:
-                    raise ValueError("No notebook received")
-                for msg in msgs:
-                    logger.debug(f"Received message, sending ack: {msg.data[:40]}")
-                    await msg.ack()
-                logger.debug(f"Received {len(msgs)} notebook(s)")
-                return msgs[0]
-            except asyncio.TimeoutError:
+                msg = await sub.next_msg(timeout=None)
+                await msg.ack()
+                logger.debug(f"Received {msg.data[:40]}")
+                return msg
+            except (TimeoutError, CancelledError):
+                logger.debug(f"Timed out while waiting for processed notebook")
+                await asyncio.sleep(1.0)
                 continue
+        raise TypeError("Wait timed out!")
 
     def write_notebook_to_file(self, msg):
         data = json.loads(msg.data.decode())
