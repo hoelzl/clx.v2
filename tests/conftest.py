@@ -9,7 +9,8 @@ import pytest
 from clx.utils.text_utils import Text
 
 if TYPE_CHECKING:
-    from clx.course import Course, Section
+    from clx.course import Course
+    from clx.section import Section
     from clx.topic import Topic
 
 COURSE_1_XML = """

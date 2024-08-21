@@ -2,107 +2,27 @@ import asyncio
 import json
 import logging
 import os
-import shutil
-from abc import ABC
 from asyncio import CancelledError
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 import nats
 from attrs import frozen
 from nats.js import JetStreamContext
 from nats.js.api import AckPolicy, ConsumerConfig
 
+from clx.course_file import Notebook
 from clx.operation import Operation
-from clx.utils.nats_utils import process_image_request
 from clx.utils.path_utils import is_image_file, is_image_source_file
-from clx.utils.text_utils import sanitize_subject_name, unescape
-
-if TYPE_CHECKING:
-    from clx.course import DictGroup
-    from clx.course_file import DataFile, CourseFile, Notebook
+from clx.utils.text_utils import sanitize_key_name, unescape
 
 logger = logging.getLogger(__name__)
 
 NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
-
-# Must be the same as in nb.nats_server
-NB_PROCESS_SUBJECT = "notebook.process"
+NB_PROCESS_ROUTING_KEY = "notebook.process"
 NB_PROCESS_STREAM = "NOTEBOOK_PROCESS_STREAM"
 NB_RESULT_STREAM = "NOTEBOOK_RESULT_STREAM"
-NB_RESULT_SUBJECT = "notebook.result"
-
-
-@frozen
-class DeleteFileOperation(Operation):
-    file: "CourseFile"
-    file_to_delete: Path
-
-    async def exec(self, *args, **kwargs) -> None:
-        logger.info(f"Deleting {self.file_to_delete}")
-        self.file_to_delete.unlink()
-        self.file.generated_outputs.remove(self.file_to_delete)
-
-
-@frozen
-class ConvertFileOperation(Operation, ABC):
-    input_file: "CourseFile"
-    output_file: Path
-
-
-@frozen
-class ConvertPlantUmlFile(ConvertFileOperation):
-    async def exec(self, *_args, **_kwargs) -> None:
-        logger.info(
-            f"Converting PlantUML file {self.input_file.relative_path} "
-            f"to {self.output_file}"
-        )
-        await process_image_request(self, "PlantUML", "plantuml_process_stream")
-        self.input_file.generated_outputs.add(self.output_file)
-
-
-@frozen
-class ConvertDrawIoFile(ConvertFileOperation):
-    async def exec(self, *_args, **_kwargs) -> Any:
-        logger.info(
-            f"Converting DrawIO file {self.input_file.relative_path} "
-            f"to {self.output_file}"
-        )
-        await process_image_request(self, "DrawIO", "drawio_process_stream")
-        self.input_file.generated_outputs.add(self.output_file)
-
-
-@frozen
-class CopyFileOperation(Operation):
-    input_file: "DataFile"
-    output_file: Path
-
-    async def exec(self, *args, **kwargs) -> Any:
-        logger.info(f"Copying {self.input_file.relative_path} to {self.output_file}")
-        if not self.output_file.parent.exists():
-            self.output_file.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(self.input_file.path, self.output_file)
-        self.input_file.generated_outputs.add(self.output_file)
-
-
-@frozen
-class CopyDictGroupOperation(Operation):
-    dict_group: "DictGroup"
-    lang: str
-
-    async def exec(self, *args, **kwargs) -> Any:
-        logger.debug(
-            f"Copying dict group '{self.dict_group.name[self.lang]}' "
-            f"for {self.lang}"
-        )
-        loop = asyncio.get_running_loop()
-        tasks = [
-            loop.run_in_executor(
-                None, self.dict_group.copy_to_output(is_speaker, self.lang)
-            )
-            for is_speaker in [False, True]
-        ]
-        await asyncio.gather(*tasks)
+NB_RESULT_ROUTING_KEY = "notebook.result"
 
 
 @frozen
@@ -121,8 +41,8 @@ class ProcessNotebookOperation(Operation):
         lang = self.lang
         format_ = self.format
         mode = self.mode
-        subject_postfix = f"{id_}_{num}_{lang}_{format_}_{mode}"
-        return sanitize_subject_name(f"notebook.result.{subject_postfix}")
+        routing_key_postfix = f"{id_}_{num}_{lang}_{format_}_{mode}"
+        return sanitize_key_name(f"notebook.result.{routing_key_postfix}")
 
     async def exec(self, *args, **kwargs) -> Any:
         try:
@@ -196,20 +116,20 @@ class ProcessNotebookOperation(Operation):
         for num_tries in range(10):
             try:
                 await js.publish(
-                    subject=NB_PROCESS_SUBJECT,
+                    subject=NB_PROCESS_ROUTING_KEY,
                     stream=NB_PROCESS_STREAM,
                     payload=json.dumps(payload).encode(),
                 )
                 logger.debug(
                     f"Notebook-Processor: Published to subject "
-                    f"{NB_PROCESS_SUBJECT} on stream {NB_PROCESS_STREAM}, "
+                    f"{NB_PROCESS_ROUTING_KEY} on stream {NB_PROCESS_STREAM}, "
                     f"waiting for response"
                 )
                 break
             except CancelledError:
                 logger.info(
                     f"Notebook-Processor: Timed out while publishing to subject "
-                    f"{NB_PROCESS_SUBJECT} on stream {NB_PROCESS_STREAM}, retrying"
+                    f"{NB_PROCESS_ROUTING_KEY} on stream {NB_PROCESS_STREAM}, retrying"
                 )
                 continue
             except Exception as e:

@@ -2,8 +2,10 @@ from pathlib import Path
 from typing import cast
 
 from clx.course_file import (CourseFile, DataFile, DrawIoFile, Notebook, PlantUmlFile)
-from clx.file_ops import (ConvertDrawIoFile, ConvertPlantUmlFile, CopyFileOperation,
-                          ProcessNotebookOperation, )
+from clx.operations.process_notebook import ProcessNotebookOperation
+from clx.operations.copy_file import CopyFileOperation
+from clx.operations.convert_drawio_file import ConvertDrawIoFileOperation
+from clx.operations.convert_plantuml_file import ConvertPlantUmlFileOperation
 from clx.operation import Concurrently
 from clx.utils.path_utils import output_specs
 
@@ -34,7 +36,7 @@ async def test_file_from_path_plant_uml_operations(course_1, topic_1, nc):
     unit = CourseFile.from_path(course_1, file_path, topic_1)
 
     process_op = await unit.get_processing_operation(course_1.output_root)
-    assert isinstance(process_op, ConvertPlantUmlFile)
+    assert isinstance(process_op, ConvertPlantUmlFileOperation)
     assert process_op.input_file == unit
     assert process_op.output_file == topic_1.path / "img/my_diag.png"
 
@@ -60,7 +62,7 @@ async def test_file_from_path_drawio_operations(course_1, topic_1, nc):
     unit = CourseFile.from_path(course_1, file_path, topic_1)
 
     process_op = await unit.get_processing_operation(course_1.output_root)
-    assert isinstance(process_op, ConvertDrawIoFile)
+    assert isinstance(process_op, ConvertDrawIoFileOperation)
     assert process_op.input_file == unit
     assert process_op.output_file == topic_1.path / "img/my_drawing.png"
 

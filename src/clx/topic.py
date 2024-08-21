@@ -11,8 +11,8 @@ from clx.utils.path_utils import is_ignored_dir_for_course, is_in_dir, \
     prog_lang_to_extension
 
 if TYPE_CHECKING:
-    from clx.course import Course, Section
-
+    from clx.course import Course
+    from clx.section import Section
 
 logger = logging.getLogger(__name__)
 

@@ -5,8 +5,6 @@ from typing import TYPE_CHECKING
 
 from attrs import define, field
 
-from clx.file_ops import (ConvertDrawIoFile, ConvertPlantUmlFile, CopyFileOperation,
-                          ProcessNotebookOperation, )
 from clx.operation import Concurrently, NoOperation, Operation
 from clx.utils.div_uils import FIRST_EXECUTION_STAGE, File, LAST_EXECUTION_STAGE
 from clx.utils.notebook_utils import find_notebook_titles
@@ -15,7 +13,8 @@ from clx.utils.path_utils import (PLANTUML_EXTENSIONS, ext_for, extension_to_pro
 from clx.utils.text_utils import Text
 
 if TYPE_CHECKING:
-    from clx.course import Course, Section
+    from clx.course import Course
+    from clx.section import Section
     from clx.topic import Topic
 
 logger = logging.getLogger(__name__)
@@ -78,7 +77,8 @@ class CourseFile(File):
 @define
 class PlantUmlFile(CourseFile):
     async def get_processing_operation(self, target_dir: Path) -> Operation:
-        return ConvertPlantUmlFile(
+        from clx.operations.convert_plantuml_file import ConvertPlantUmlFileOperation
+        return ConvertPlantUmlFileOperation(
             input_file=self,
             output_file=self.img_path,
         )
@@ -95,7 +95,8 @@ class PlantUmlFile(CourseFile):
 @define
 class DrawIoFile(CourseFile):
     async def get_processing_operation(self, target_dir: Path) -> Operation:
-        return ConvertDrawIoFile(
+        from clx.operations.convert_drawio_file import ConvertDrawIoFileOperation
+        return ConvertDrawIoFileOperation(
             input_file=self,
             output_file=self.img_path,
         )
@@ -117,6 +118,7 @@ class DataFile(CourseFile):
         return LAST_EXECUTION_STAGE
 
     async def get_processing_operation(self, target_dir: Path) -> Operation:
+        from clx.operations.copy_file import CopyFileOperation
         return Concurrently(
             CopyFileOperation(
                 input_file=self,
@@ -138,6 +140,7 @@ class Notebook(CourseFile):
         return cls(course=course, path=file, topic=topic, title=title)
 
     async def get_processing_operation(self, target_dir: Path) -> Operation:
+        from clx.operations.process_notebook import ProcessNotebookOperation
         return Concurrently(
             ProcessNotebookOperation(
                 input_file=self,

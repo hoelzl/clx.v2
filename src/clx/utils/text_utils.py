@@ -58,7 +58,7 @@ def sanitize_file_name(text: str):
     return sanitized_text
 
 
-def sanitize_subject_name(text: str):
+def sanitize_key_name(text: str):
     sanitized_text = text.strip().translate(_STREAM_STRING_TRANSLATION_TABLE).lower()
     return sanitized_text
 

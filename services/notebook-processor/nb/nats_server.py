@@ -17,10 +17,10 @@ QUEUE_GROUP = os.environ.get("NOTEBOOK_PROCESSOR_QUEUE_GROUP", "NOTEBOOK_PROCESS
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 LOG_CELL_PROCESSING = os.environ.get("LOG_CELL_PROCESSING", "False") == "True"
 
-NB_PROCESS_SUBJECT = "notebook.process"
+NB_PROCESS_ROUTING_KEY = "notebook.process"
 NB_PROCESS_STREAM = "NOTEBOOK_PROCESS_STREAM"
 NB_RESULT_STREAM = "NOTEBOOK_RESULT_STREAM"
-NB_RESULT_SUBJECT = "notebook.result"
+NB_RESULT_ROUTING_KEY = "notebook.result"
 
 
 # Logging setup
@@ -46,7 +46,7 @@ async def extract_payload(msg):
         raise
 
 async def process_notebook_file(payload: NotebookPayload) -> str:
-    logger.debug(f"Processing notebook payload for '{payload.reply_subject}'")
+    logger.debug(f"Processing notebook payload for '{payload.reply_routing_key}'")
     output_spec = create_output_spec(
         output_type=payload.output_type,
         prog_lang=payload.prog_lang,
@@ -85,7 +85,7 @@ class NotebookConverter:
             raise
 
     async def subscribe_to_events(self):
-        subject = NB_PROCESS_SUBJECT
+        subject = NB_PROCESS_ROUTING_KEY
         stream = NB_PROCESS_STREAM
         logger.debug(f"Subscribing to subject: '{subject}' on stream '{stream}'")
         config = ConsumerConfig(
@@ -123,11 +123,11 @@ class NotebookConverter:
             result = await process_notebook_file(payload)
             logger.debug(f"Result: {result[:60]}")
             response = json.dumps({"result": result})
-            await self.publish_response(payload.reply_subject, response)
+            await self.publish_response(payload.reply_routing_key, response)
         except Exception as e:
             logger.exception(f"Error while processing notebook: {e}", exc_info=e)
             await self.jetstream.publish(
-                subject=payload.reply_subject,
+                subject=payload.reply_routing_key,
                 stream=NB_RESULT_STREAM,
                 payload=json.dumps({"error": str(e)}).encode("utf-8"),
             )

@@ -16,7 +16,7 @@ NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
 QUEUE_GROUP = os.environ.get("DRAWIO_CONVERTER_QUEUE_GROUP", "DRAWIO_CONVERTER")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG").upper()
 
-DRAWIO_PROCESS_SUBJECT = "drawio.process"
+DRAWIO_PROCESS_ROUTING_KEY = "drawio.process"
 DRAWIO_PROCESS_STREAM = "DRAWIO_PROCESS_STREAM"
 IMG_RESULT_STREAM = "IMG_RESULT_STREAM"
 
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DrawioPayload:
     data: str
-    reply_subject: str
+    reply_routing_key: str
     output_format: str = "png"
 
 
@@ -72,17 +72,17 @@ class DrawioConverter:
             raise
 
     async def subscribe_to_events(self):
-        subject = DRAWIO_PROCESS_SUBJECT
+        routing_key = DRAWIO_PROCESS_ROUTING_KEY
         stream = DRAWIO_PROCESS_STREAM
-        logger.debug(f"Subscribing to subject: '{subject}' on stream '{stream}'")
+        logger.debug(f"Subscribing to routing_key: '{routing_key}' on stream '{stream}'")
         config = ConsumerConfig(
             ack_policy=AckPolicy.EXPLICIT,
             max_deliver=1,
         )
         self.subscription = await self.jetstream.subscribe(
-            subject=subject, queue=QUEUE_GROUP, stream=stream, config=config
+            subject=routing_key, queue=QUEUE_GROUP, stream=stream, config=config
         )
-        logger.info(f"Subscribed to subject: '{subject}' on stream '{stream}'")
+        logger.info(f"Subscribed to routing_key: '{routing_key}' on stream '{stream}'")
 
     async def fetch_and_process_messages(self):
         while True:
@@ -112,11 +112,11 @@ class DrawioConverter:
             encoded_result = b64encode(result)
             logger.debug(f"Result: {len(result)} bytes: {encoded_result[:20]}")
             response = json.dumps({"result": encoded_result.decode("utf-8")})
-            await self.publish_response(payload.reply_subject, response)
+            await self.publish_response(payload.reply_routing_key, response)
         except Exception as e:
             logger.exception(f"Error while processing DrawIO file: {e}", exc_info=e)
             await self.jetstream.publish(
-                subject=payload.reply_subject,
+                subject=payload.reply_routing_key,
                 stream=IMG_RESULT_STREAM,
                 payload=json.dumps({"error": str(e)}).encode("utf-8"),
             )

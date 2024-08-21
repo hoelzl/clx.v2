@@ -24,27 +24,27 @@ FORCE_DELETE_STREAMS = os.environ.get("FORCE_DELETE_STREAMS", True)
 NATS_STREAMS = {
     "drawio_process_stream": {
         "stream_name": "DRAWIO_PROCESS_STREAM",
-        "subjects": ["drawio.process", "drawio.process.>"],
+        "routing_keys": ["drawio.process", "drawio.process.>"],
         "retention": RetentionPolicy.WORK_QUEUE,
     },
     "plantuml_process_stream": {
         "stream_name": "PLANTUML_PROCESS_STREAM",
-        "subjects": ["plantuml.process", "plantuml.process.>"],
+        "routing_keys": ["plantuml.process", "plantuml.process.>"],
         "retention": RetentionPolicy.WORK_QUEUE,
     },
     "img_result_stream": {
         "stream_name": "IMG_RESULT_STREAM",
-        "subjects": ["img.result", "img.result.>"],
+        "routing_keys": ["img.result", "img.result.>"],
         "retention": RetentionPolicy.WORK_QUEUE,
     },
     "notebook_process_stream": {
         "stream_name": "NOTEBOOK_PROCESS_STREAM",
-        "subjects": ["notebook.process", "notebook.process.>"],
+        "routing_keys": ["notebook.process", "notebook.process.>"],
         "retention": RetentionPolicy.WORK_QUEUE,
     },
     "notebook_result_stream": {
         "stream_name": "NOTEBOOK_RESULT_STREAM",
-        "subjects": ["notebook.result", "notebook.result.>"],
+        "routing_keys": ["notebook.result", "notebook.result.>"],
         "retention": RetentionPolicy.WORK_QUEUE,
     },
 }
